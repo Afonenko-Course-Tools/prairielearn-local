@@ -172,7 +172,7 @@ services:
       bootstrap-admin: {condition: service_completed_successfully}
       moodle: {condition: service_healthy}
     healthcheck:
-      test: [CMD, wget, -q, --ca-certificate=/state/tls/ca.crt, -O, /dev/null, "https://${PL_HOST:-pl.infra.localhost}:${PL_HTTPS_PORT:-19444}/healthz"]
+      test: [CMD, curl, --fail, --silent, --show-error, --cacert, /state/tls/ca.crt, "https://${PL_HOST:-pl.infra.localhost}:${PL_HTTPS_PORT:-19444}/healthz"]
       interval: 10s
       timeout: 5s
       retries: 10
