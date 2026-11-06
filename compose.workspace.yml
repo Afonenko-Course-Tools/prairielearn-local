@@ -1,0 +1,51 @@
+# Только для отдельного Docker daemon; не подключается базовым Compose.
+services:
+  pl:
+    environment:
+      PL_CONFIG_PATH: /run/pl-native/config.json
+    volumes:
+      - type: bind
+        source: ${PL_CONFIG_FILE:?Нужен готовый native PL config для Workspace}
+        target: /run/pl-native/config.json
+        read_only: true
+        bind: {create_host_path: false}
+
+
+  bootstrap-admin:
+    environment:
+      PL_CONFIG_PATH: /run/pl-native/config.json
+    volumes:
+      - type: bind
+        source: ${PL_CONFIG_FILE:?Нужен готовый native PL config}
+        target: /run/pl-native/config.json
+        read_only: true
+        bind: {create_host_path: false}
+
+  workspace-host:
+    image: ${PL_IMAGE:-ghcr.io/afonenko-course-tools/prairielearn-community-gateway:2.5.8}
+    platform: linux/amd64
+    network_mode: service:pl
+    working_dir: /PrairieLearn
+    entrypoint: [sh, -ec]
+    command:
+      - >-
+        test "$$WORKSPACE_DOCKER_SOCKET" != /var/run/docker.sock &&
+        test "$$WORKSPACE_DOCKER_SOCKET" != /run/docker.sock ||
+        { echo 'Workspace требует отдельного Docker daemon' >&2; exit 64; };
+        exec pnpm start-workspace-host
+    environment:
+      NODE_ENV: production
+      WORKSPACE_DOCKER_SOCKET: ${WORKSPACE_DOCKER_SOCKET:?Нужен выделенный Docker socket}
+      HOST_JOBS_DIR: ${HOST_JOBS_DIR:-${PWD}/state/jobs}
+    volumes:
+      - ${HOST_JOBS_DIR:-${PWD}/state/jobs}:/jobs
+      - ${PL_CONFIG_FILE:?Нужен native PL config}:/PrairieLearn/config.json:ro
+      - type: bind
+        source: ${WORKSPACE_DOCKER_SOCKET:?Нужен выделенный Docker socket}
+        target: /var/run/docker.sock
+        bind: {create_host_path: false}
+    depends_on:
+      bootstrap-admin: {condition: service_completed_successfully}
+    mem_limit: 768m
+    cpus: 1
+    restart: unless-stopped
