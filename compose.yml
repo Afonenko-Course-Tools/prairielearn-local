@@ -1,0 +1,189 @@
+name: ${COMPOSE_PROJECT_NAME:-prairielearn-local}
+
+x-pl-image: &pl-image ${PL_IMAGE:-ghcr.io/afonenko-course-tools/prairielearn-community-gateway:2.5.8}
+x-state: &state
+  type: bind
+  source: ${STATE_DIR:-./state}
+  target: /state
+x-jobs: &jobs
+  type: bind
+  source: ${HOST_JOBS_DIR:-${PWD:?Запустите Compose из каталога репозитория}/state/jobs}
+  target: /jobs
+x-moodle-env: &moodle-env
+  MOODLE_WWWROOT: https://${MOODLE_HOST:-moodle.infra.localhost}:${MOODLE_HTTPS_PORT:-19443}
+  GATEWAY_ORIGIN: https://${PL_HOST:-pl.infra.localhost}:${PL_HTTPS_PORT:-19444}
+  GATEWAY_COURSE_SLUG: ${MOODLE_TOOL_SLUG:-example}
+  MOODLE_DB_HOST: moodle-db
+  MOODLE_DB_NAME: moodle
+  MOODLE_DB_USER: moodle
+  MOODLE_DB_PASSWORD_FILE: /state/moodle-db-password
+  MOODLE_REGISTRATION_FILE: /state/moodle/registration.json
+  LOCAL_CA_FILE: /state/tls/ca.crt
+
+services:
+  config-init:
+    image: *pl-image
+    platform: linux/amd64
+    entrypoint: [/PrairieLearn/.venv/bin/python, /local/scripts/init-config.py, --state, /state]
+    environment:
+      PL_HOST: ${PL_HOST:-pl.infra.localhost}
+      PL_HTTPS_PORT: ${PL_HTTPS_PORT:-19444}
+      MOODLE_HOST: ${MOODLE_HOST:-moodle.infra.localhost}
+      MOODLE_HTTPS_PORT: ${MOODLE_HTTPS_PORT:-19443}
+      HOST_JOBS_DIR: ${HOST_JOBS_DIR:-${PWD}/state/jobs}
+    volumes:
+      - *state
+      - *jobs
+      - ./scripts/init-config.py:/local/scripts/init-config.py:ro
+      - ./config:/local/config:ro
+    mem_limit: 256m
+    cpus: 0.5
+    restart: 'no'
+
+  pl:
+    image: *pl-image
+    platform: linux/amd64
+    entrypoint: [bash, /local/config/start-pl.sh]
+    environment:
+      NODE_ENV: production
+      # Смена public origin пересоздаёт PL, чтобы native config был загружен заново.
+      PL_HOST: ${PL_HOST:-pl.infra.localhost}
+      PL_HTTPS_PORT: ${PL_HTTPS_PORT:-19444}
+      HOST_JOBS_DIR: ${HOST_JOBS_DIR:-${PWD}/state/jobs}
+    volumes:
+      - postgres:/var/postgres
+      - files:/files
+      - s3:/PrairieLearn/s3rver
+      - courses:/course
+      - /var/run/docker.sock:/var/run/docker.sock
+      - *jobs
+      - ${STATE_DIR:-./state}/pl:/run/base-pl:ro
+      - ./config/start-pl.sh:/local/config/start-pl.sh:ro
+    extra_hosts: [host.docker.internal:host-gateway]
+    depends_on:
+      config-init: {condition: service_completed_successfully}
+    mem_limit: 4g
+    cpus: 2
+    stop_grace_period: 120s
+    healthcheck:
+      test: [CMD, curl, --fail, http://127.0.0.1:3000/pl/webhooks/ping]
+      interval: 10s
+      timeout: 5s
+      start_period: 120s
+      retries: 30
+    restart: unless-stopped
+
+  bootstrap-admin:
+    image: *pl-image
+    platform: linux/amd64
+    network_mode: service:pl
+    working_dir: /PrairieLearn/apps/prairielearn
+    entrypoint: [sh, -ec]
+    command:
+      - >-
+        ln -sfn "$${PL_CONFIG_PATH:-/run/base-pl/config.json}" /PrairieLearn/config.json;
+        exec node /PrairieLearn/apps/prairielearn/tools/bootstrap-local-admin.mjs
+    environment:
+      NODE_ENV: production
+      BOOTSTRAP_ADMIN_UID: ${BOOTSTRAP_ADMIN_UID:-servicebootstrap@local.invalid}
+    volumes:
+      - ${STATE_DIR:-./state}/pl:/run/base-pl:ro
+      - ./scripts/bootstrap-admin.mjs:/PrairieLearn/apps/prairielearn/tools/bootstrap-local-admin.mjs:ro
+    depends_on:
+      pl: {condition: service_healthy}
+    mem_limit: 384m
+    cpus: 0.5
+    restart: 'no'
+
+  moodle-db:
+    image: ${POSTGRES_IMAGE:-postgres:17}
+    environment:
+      POSTGRES_DB: moodle
+      POSTGRES_USER: moodle
+      POSTGRES_PASSWORD_FILE: /run/local/moodle-db-password
+    volumes:
+      - moodle-postgres:/var/lib/postgresql/data
+      - ${STATE_DIR:-./state}:/run/local:ro
+    depends_on:
+      config-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    mem_limit: 384m
+    cpus: 0.5
+    restart: unless-stopped
+
+  moodle-init:
+    build: {context: ., dockerfile: moodle/Dockerfile}
+    image: ${COMPOSE_PROJECT_NAME:-prairielearn-local}-moodle:5.3
+    entrypoint: [sh, -ec]
+    command:
+      - >-
+        chmod 711 /state;
+        mkdir -p /state/moodle;
+        chown 33:33 /state/moodle;
+        chmod 755 /state/moodle;
+        chgrp 33 /state/moodle-accounts.json /state/moodle-db-password;
+        chmod 640 /state/moodle-accounts.json /state/moodle-db-password;
+        exec moodle-entrypoint bootstrap
+    environment: *moodle-env
+    volumes:
+      - *state
+      - moodle-data:/var/moodledata
+    depends_on:
+      moodle-db: {condition: service_healthy}
+    mem_limit: 512m
+    cpus: 1
+    restart: 'no'
+
+  moodle:
+    build: {context: ., dockerfile: moodle/Dockerfile}
+    image: ${COMPOSE_PROJECT_NAME:-prairielearn-local}-moodle:5.3
+    environment: *moodle-env
+    volumes:
+      - *state
+      - moodle-data:/var/moodledata
+    depends_on:
+      moodle-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, curl, --fail, http://127.0.0.1/login/index.php]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 20
+    mem_limit: 768m
+    cpus: 1
+    restart: unless-stopped
+
+  proxy:
+    image: ${NGINX_IMAGE:-docker.io/library/nginx@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94}
+    command: [nginx, -c, /state/nginx.conf, -g, "daemon off;"]
+    ports:
+      - ${BIND_IP:-127.0.0.1}:${PL_HTTPS_PORT:-19444}:${PL_HTTPS_PORT:-19444}
+      - ${BIND_IP:-127.0.0.1}:${MOODLE_HTTPS_PORT:-19443}:${MOODLE_HTTPS_PORT:-19443}
+    volumes:
+      - ${STATE_DIR:-./state}:/state:ro
+    networks:
+      default:
+        aliases: ["${PL_HOST:-pl.infra.localhost}", "${MOODLE_HOST:-moodle.infra.localhost}"]
+    depends_on:
+      bootstrap-admin: {condition: service_completed_successfully}
+      moodle: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --show-error, --cacert, /state/tls/ca.crt, "https://${PL_HOST:-pl.infra.localhost}:${PL_HTTPS_PORT:-19444}/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 96m
+    cpus: 0.25
+    restart: unless-stopped
+
+volumes:
+  postgres:
+  courses:
+  files:
+  s3:
+  moodle-postgres:
+  moodle-data:
