@@ -14,6 +14,20 @@ function local_accounts(): array {
     return $accounts;
 }
 
+
+/** Разрешена только смена порта HTTPS; hostname, path и остальные части URL неизменны. */
+function local_same_url_except_port(string $old, string $new): bool {
+    $before = parse_url($old);
+    $after = parse_url($new);
+    if (!is_array($before) || !is_array($after) || ($before['scheme'] ?? '') !== 'https' ||
+            ($after['scheme'] ?? '') !== 'https' || empty($before['host']) || empty($after['host']) ||
+            isset($before['user']) || isset($before['pass']) || isset($after['user']) || isset($after['pass'])) {
+        return false;
+    }
+    unset($before['port'], $after['port']);
+    return $before === $after;
+}
+
 try {
     $accounts = local_accounts();
     if (in_array('--install', $argv, true)) {
@@ -131,11 +145,14 @@ try {
         $type = lti_get_type($typeid);
     }
     $typeconfig = lti_get_type_config($type->id);
-    if ($type->ltiversion !== LTI_VERSION_1P3 || $type->baseurl !== $target || empty($type->clientid) ||
+    $previousTarget = $type->baseurl;
+    if ($type->ltiversion !== LTI_VERSION_1P3 || !local_same_url_except_port($previousTarget, $target) || empty($type->clientid) ||
             (int) $type->state !== LTI_TOOL_STATE_CONFIGURED) {
         throw new RuntimeException('Существующая LTI регистрация отличается; автоматическая перерегистрация запрещена.');
     }
-    foreach (['initiatelogin' => $initiate, 'publickeyset' => $jwks, 'redirectionuris' => $target,
+    $previousPrefix = substr($previousTarget, 0, -strlen('/lti/launch'));
+    foreach (['initiatelogin' => $previousPrefix . '/lti/login', 'publickeyset' => $previousPrefix . '/.well-known/jwks.json',
+            'redirectionuris' => $previousTarget,
             'sendemailaddr' => (string) LTI_SETTING_ALWAYS, 'acceptgrades' => '0',
             'ltiservice_gradesynchronization' => '0'] as $key => $expected) {
         if ((string) ($typeconfig[$key] ?? '') !== $expected) {
@@ -158,7 +175,8 @@ try {
         ], $course);
         $activity = $DB->get_record('lti', ['id' => $info->instance], '*', MUST_EXIST);
     }
-    if ((int) $activity->typeid !== (int) $type->id || $activity->toolurl !== $target) {
+    if ((int) $activity->typeid !== (int) $type->id || $activity->toolurl !== $previousTarget ||
+            $activity->securetoolurl !== $previousTarget) {
         throw new RuntimeException('Существующий LTI activity относится к другой регистрации.');
     }
     $cm = get_coursemodule_from_instance('lti', $activity->id, $course->id, false, MUST_EXIST);
@@ -188,14 +206,47 @@ try {
         'syntheticSubjects' => $subjects,
     ];
     $output = getenv('MOODLE_REGISTRATION_FILE') ?: '/state/moodle/registration.json';
+    $previous = null;
     if (file_exists($output)) {
         $previous = json_decode(file_get_contents($output), true, 512, JSON_THROW_ON_ERROR);
-        if ($previous !== $registration) {
+        $identity = $previous;
+        foreach (['registration' => ['issuer', 'authUrl', 'tokenUrl', 'jwksUrl'], 'moodle' => ['activityUrl']] as $section => $fields) {
+            foreach ($fields as $field) {
+                $old = $previous[$section][$field] ?? null;
+                $new = $registration[$section][$field];
+                if (!is_string($old) || !local_same_url_except_port($old, $new)) {
+                    throw new RuntimeException('Разрешена только смена порта URL своей тестовой Moodle.');
+                }
+                $identity[$section][$field] = $new;
+            }
+        }
+        // Все native IDs, clientId, deploymentId и subjects обязаны совпасть.
+        if ($identity !== $registration) {
             throw new RuntimeException('Регистрация не совпадает с сохранённой; локальный state не перезаписан.');
         }
     }
+    if ($previousTarget !== $target) {
+        if ($previous === null) {
+            throw new RuntimeException('Для смены порта tool требуется сохранённая регистрация своей fixture.');
+        }
+        // Только URL-поля той же регистрации; DML/LTI API не пересоздают clientId и ключи.
+        $DB->update_record('lti_types', (object) ['id' => $type->id, 'baseurl' => $target,
+            'tooldomain' => lti_get_domain_from_url($target)]);
+        foreach (['initiatelogin' => $initiate, 'publickeyset' => $jwks, 'redirectionuris' => $target] as $name => $value) {
+            lti_update_config((object) ['typeid' => $type->id, 'name' => $name, 'value' => $value]);
+        }
+        $updated = clone $activity;
+        $updated->instance = $activity->id;
+        $updated->coursemodule = $cm->id;
+        $updated->toolurl = $target;
+        $updated->securetoolurl = $target;
+        if (!lti_update_instance($updated, null)) {
+            throw new RuntimeException('Не удалось обновить URL тестового LTI activity.');
+        }
+        rebuild_course_cache($course->id, true);
+    }
     $transaction->allow_commit();
-    if (!file_exists($output)) {
+    if ($previous !== $registration) {
         $temp = $output . '.tmp';
         file_put_contents($temp, json_encode($registration, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n");
         chmod($temp, 0644); // Только публичные идентификаторы, паролей и ключей здесь нет.

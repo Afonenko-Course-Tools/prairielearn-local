@@ -46,6 +46,9 @@ services:
     entrypoint: [bash, /local/config/start-pl.sh]
     environment:
       NODE_ENV: production
+      # Смена public origin пересоздаёт PL, чтобы native config был загружен заново.
+      PL_HOST: ${PL_HOST:-pl.infra.localhost}
+      PL_HTTPS_PORT: ${PL_HTTPS_PORT:-19444}
       HOST_JOBS_DIR: ${HOST_JOBS_DIR:-${PWD}/state/jobs}
     volumes:
       - postgres:/var/postgres
@@ -158,8 +161,8 @@ services:
     image: ${NGINX_IMAGE:-docker.io/library/nginx@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94}
     command: [nginx, -c, /state/nginx.conf, -g, "daemon off;"]
     ports:
-      - ${BIND_IP:-127.0.0.1}:${PL_HTTPS_PORT:-19444}:19444
-      - ${BIND_IP:-127.0.0.1}:${MOODLE_HTTPS_PORT:-19443}:19443
+      - ${BIND_IP:-127.0.0.1}:${PL_HTTPS_PORT:-19444}:${PL_HTTPS_PORT:-19444}
+      - ${BIND_IP:-127.0.0.1}:${MOODLE_HTTPS_PORT:-19443}:${MOODLE_HTTPS_PORT:-19443}
     volumes:
       - ${STATE_DIR:-./state}:/state:ro
     networks:
@@ -169,7 +172,7 @@ services:
       bootstrap-admin: {condition: service_completed_successfully}
       moodle: {condition: service_healthy}
     healthcheck:
-      test: [CMD, wget, -q, --ca-certificate=/state/tls/ca.crt, -O, /dev/null, "https://${PL_HOST:-pl.infra.localhost}:19444/healthz"]
+      test: [CMD, wget, -q, --ca-certificate=/state/tls/ca.crt, -O, /dev/null, "https://${PL_HOST:-pl.infra.localhost}:${PL_HTTPS_PORT:-19444}/healthz"]
       interval: 10s
       timeout: 5s
       retries: 10

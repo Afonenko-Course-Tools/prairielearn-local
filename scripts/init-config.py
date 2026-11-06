@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Подготовка обычных локальных конфигураций; Docker и системное доверие не меняет."""
 import argparse
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -41,6 +42,16 @@ def host(value):
     if not re.fullmatch(r'[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?', value) or '..' in value:
         raise ValueError('Ожидается DNS hostname без схемы и порта')
     return value
+
+
+def cookie_domain(hostname):
+    if hostname == 'localhost':
+        return None
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        return '.' + hostname
+    return None
 
 
 def port(value):
@@ -107,16 +118,32 @@ def prepare(state, values, jobs):
         json_once(accounts, {role: {'username': 'local' + role, 'password': 'Aa1!' + secrets.token_urlsafe(24)}
                               for role in ('admin', 'student', 'teacher')})
     tls(state, pl_host, moodle_host)
-    json_once(state / 'pl/config.json', {
-        'devMode': False, 'hostname': pl_host, 'serverCanonicalHost': f'https://{pl_host}:{pl_port}',
-        'cookieDomain': None, 'hasShib': False, 'coursesRoot': '/course', 'trustProxy': 1,
-        'databaseEncryptionKey': token(state / 'database-key'), 'secretKey': token(state / 'session-key'),
-        'externalGradingUseAws': False, 'externalGradingPullImagesFromDockerHub': False,
-        'workersCount': 1, 'fileStoreStorageTypeDefault': 'FileSystem',
-        'workspaceEnable': False, 'workspaceHomeDirRoot': '/jobs/workspaces',
-    })
+    config_path = state / 'pl/config.json'
+    if config_path.exists():
+        config = json.loads(config_path.read_text())
+        if not isinstance(config, dict):
+            raise ValueError('Ожидается объект native PL config')
+        addresses = {'hostname': pl_host, 'serverCanonicalHost': f'https://{pl_host}:{pl_port}',
+                     'cookieDomain': cookie_domain(pl_host)}
+        if any(config.get(name) != value for name, value in addresses.items()):
+            config.update(addresses)
+            temporary = config_path.with_suffix('.tmp')
+            temporary.write_text(json.dumps(config, ensure_ascii=False, indent=2) + '\n')
+            temporary.chmod(0o600)
+            temporary.replace(config_path)
+    else:
+        json_once(config_path, {
+            'devMode': False, 'hostname': pl_host, 'serverCanonicalHost': f'https://{pl_host}:{pl_port}',
+            'cookieDomain': cookie_domain(pl_host), 'hasShib': False, 'coursesRoot': '/course', 'trustProxy': 1,
+            'databaseEncryptionKey': token(state / 'database-key'), 'secretKey': token(state / 'session-key'),
+            'externalGradingUseAws': False, 'externalGradingPullImagesFromDockerHub': False,
+            'workersCount': 1, 'fileStoreStorageTypeDefault': 'FileSystem',
+            'workspaceEnable': False, 'workspaceHomeDirRoot': '/jobs/workspaces',
+        })
     for source, destination in [('nginx.conf', 'nginx.conf'), ('nginx.auth.conf', 'nginx-auth.conf')]:
-        rendered = (ROOT / 'config' / source).read_text().replace('PL_PUBLIC_HOST', pl_host).replace('MOODLE_PUBLIC_HOST', moodle_host)
+        rendered = ((ROOT / 'config' / source).read_text()
+                    .replace('PL_PUBLIC_HOST', pl_host).replace('MOODLE_PUBLIC_HOST', moodle_host)
+                    .replace('PL_PUBLIC_PORT', str(pl_port)).replace('MOODLE_PUBLIC_PORT', str(moodle_port)))
         (state / destination).write_text(rendered)
     print('Инфраструктурные конфигурации готовы; ключи и аккаунты сохранены, системное доверие не менялось.')
 
