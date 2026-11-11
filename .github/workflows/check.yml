@@ -1,0 +1,24 @@
+name: Проверки Local
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-task@v2
+      - name: Установить системные зависимости проверок
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes python3-yaml shellcheck nodejs
+          sudo ln -sf "$(command -v task)" /usr/local/bin/go-task
+      - name: Проверить Local
+        run: go-task check

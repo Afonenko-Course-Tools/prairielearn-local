@@ -4,6 +4,12 @@
 
 **Готовность:** исходники инфраструктуры подготовлены; настоящий чистый запуск, сохранность после повторного `up` и TLS должен принять оператор. Подключённый override не означает приёмку Workspace или LTI. Работающий прежний стенд не используется как доказательство старта с нуля.
 
+Для отдельного loopback dev-preview Java и System Practice доступны
+`go-task prepare COURSE=java` и `go-task up COURSE=java`. Подготовка сохраняет
+кандидата, успешная native-загрузка активирует его сайт. Этот режим и его
+проверки описаны в [инструкции preview](docs/preview.md) и
+[сборке и доставке](docs/build-delivery.md). Быстрый контроль Local — `go-task check`.
+
 ## Требования
 
 - Linux/amd64, Docker Engine и Docker Compose v2.
@@ -85,7 +91,11 @@ docker compose down
 
 ## Курсы и вход из Moodle
 
-Публикация и обновление готовых курсов выполняются **внешними штатными средствами Platform**, отдельно от инфраструктурного `up`. В репозитории нет обёртки импорта, локального курса-примера, собственного registry или orchestration bootstrap/sync. Текущие административные команды и guards описаны в [документации Platform](https://github.com/Afonenko-Course-Tools/prairielearn-platform/blob/main/docs/proxmox-pilot.md).
+Для базового production Compose публикация и обновление готовых курсов выполняются
+штатными средствами Platform отдельно от инфраструктурного `up`. Dev-preview
+использует отдельные Task-команды и dev loader Platform. В репозитории нет
+собственного импортёра или registry. Текущие административные команды и guards
+описаны в [документации Platform](https://github.com/Afonenko-Course-Tools/prairielearn-platform/blob/main/docs/proxmox-pilot.md).
 
 Gateway и Bridge используют предоставленные оператором существующие native конфигурации с фактическими IDs/UUID и регистрацией Moodle. Начальный стенд не придумывает их и не создаёт поддельный delivery. Базовый HTTPS подтверждает доступность инфраструктуры. Вход пользователя в PL и рабочая LTI-привязка требуют отдельной auth-конфигурации и опубликованного курса; базовый запуск их не обещает. Auth подключают явно через `docker compose -f compose.yml -f compose.auth.yml …` с готовыми конфигурациями, описанными в [config/README.md](config/README.md).
 

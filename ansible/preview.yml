@@ -1,0 +1,42 @@
+---
+- name: Собрать курс один раз на controller и запустить local preview
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    local_root: "{{ (playbook_dir ~ '/..') | realpath }}"
+    course: java
+    output_root: "{{ local_root }}/state/builds"
+    prepare_course: true
+    providers_root: "{{ local_root | dirname }}"
+    course_root: "{{ local_root }}/../{{ 'Java' if course == 'java' else 'System-Practice' }}"
+  tasks:
+    - name: Проверить системный go-task controller
+      ansible.builtin.command:
+        argv: [go-task, --version]
+      changed_when: false
+    - name: Подготовить выбранный курс один раз
+      ansible.builtin.command:
+        argv:
+          - go-task
+          - --dir
+          - "{{ local_root }}"
+          - prepare
+          - "COURSE={{ course }}"
+          - "OUTPUT_ROOT={{ output_root }}"
+          - "COURSE_ROOT={{ course_root }}"
+          - "PROVIDERS_ROOT={{ providers_root }}"
+      when: prepare_course | bool
+    - name: Запустить готовый выпуск и дождаться native load
+      ansible.builtin.command:
+        argv:
+          - go-task
+          - --dir
+          - "{{ local_root }}"
+          - up
+          - "COURSE={{ course }}"
+          - "OUTPUT_ROOT={{ output_root }}"
+      register: preview_result
+    - name: Показать адреса готового preview
+      ansible.builtin.debug:
+        var: preview_result.stdout_lines

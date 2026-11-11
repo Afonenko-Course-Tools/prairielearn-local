@@ -1,0 +1,65 @@
+# Отдельный dev preview: не объединять с production compose.yml.
+services:
+  pl:
+    image: ${PL_PREVIEW_IMAGE:-ghcr.io/afonenko-course-tools/prairielearn-community-gateway:2.5.8}
+    platform: linux/amd64
+    entrypoint: [bash, /local/start-preview-pl.sh]
+    environment:
+      NODE_ENV: development
+      HOST_JOBS_DIR: ${PREVIEW_JOBS_DIR:?}
+      # Смена origin должна пересоздать PL и перечитать native config.
+      PREVIEW_PUBLIC_ORIGIN: http://127.0.0.1:${PREVIEW_PORT:?}
+    volumes:
+      - postgres:/var/postgres
+      - files:/files
+      - s3:/PrairieLearn/s3rver
+      - type: bind
+        source: ${PREVIEW_OUTPUT_ROOT:?}
+        target: /course
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${PREVIEW_STATE_DIR:?}/pl
+        target: /run/preview
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${PREVIEW_JOBS_DIR:?}
+        target: /jobs
+        bind: {create_host_path: false}
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config/start-preview-pl.sh:/local/start-preview-pl.sh:ro
+      - ${PREVIEW_PLATFORM_ROOT:?}/tools/dev-load-course.mjs:/PrairieLearn/apps/prairielearn/tools/dev-load-course.mjs:ro
+    mem_limit: 4g
+    cpus: 2
+    stop_grace_period: 120s
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:3000/pl/webhooks/ping]
+      interval: 5s
+      timeout: 5s
+      start_period: 120s
+      retries: 60
+    restart: unless-stopped
+
+  proxy:
+    image: ${NGINX_IMAGE:-docker.io/library/nginx@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94}
+    ports: ["127.0.0.1:${PREVIEW_PORT:?}:80"]
+    volumes:
+      # Родитель, а не leaf site: atomic переключение active видно Nginx.
+      - type: bind
+        source: ${PREVIEW_OUTPUT_ROOT:?}
+        target: /output
+        read_only: true
+        bind: {create_host_path: false}
+      - ${PREVIEW_STATE_DIR:?}/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./config/nginx.preview-proxy.conf:/etc/nginx/preview-proxy.conf:ro
+    depends_on:
+      pl: {condition: service_healthy}
+    mem_limit: 96m
+    cpus: 0.25
+    restart: unless-stopped
+
+volumes:
+  postgres:
+  files:
+  s3:
