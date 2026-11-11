@@ -22,18 +22,20 @@ go-task up COURSE=java
 Local не устанавливает packages. Обычный `prepare` копирует установленный
 `_extensions` курса вместе с исходниками; соседние расширения не нужны.
 Обновление выполняет владелец курса заранее штатным `quarto add`. Для совместной
-разработки сначала явно установите выбранный checkout тем же механизмом, затем
-запустите `prepare`, например:
+разработки сначала явно установите выбранную GitHub dev-ветку тем же механизмом,
+сохраняя namespace владельца и hook paths курса, затем запустите `prepare`:
 
 ```sh
 cd /absolute/Java
-quarto add /absolute/quarto-course-prairielearn --no-prompt
+quarto add Afonenko-Course-Tools/quarto-course-prairielearn@dev-branch --no-prompt
 cd /absolute/prairielearn-local
 go-task prepare COURSE=java COURSE_ROOT=/absolute/Java
 ```
 
-Quarto использует namespace выбранного source; перед добавлением исключите
-дубли одного расширения из разных namespaces штатным `quarto remove`.
+Вместо `dev-branch` укажите выбранную опубликованную ветку производителя.
+Для локального изменения bytes можно править установленные packages курса
+непосредственно. `quarto add /absolute/checkout` создаёт иной layout: такой
+переход требует свежей установки и явного согласования всех hook paths курса.
 Для subprojects установите package также в требуемых project scopes по
 инструкциям курса. Local не выбирает версии, не читает source manifests и
 не заменяет установленные packages рабочими деревьями автоматически.
