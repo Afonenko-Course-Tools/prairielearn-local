@@ -1,0 +1,110 @@
+---
+# Готовый trusted site_archive и expected_native_commit принадлежат одной сборке.
+# Native Git release branch immutable; другие native writers исключаются оператором.
+- name: Доставить один готовый student/native Git выпуск
+  hosts: course_cd
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: Проверить входы готовой поставки
+      ansible.builtin.assert:
+        that:
+          - (course_id | string) is match('^[1-9][0-9]*\Z')
+          - expected_native_commit is match('^[0-9a-f]{40}\Z')
+          - pl_container is match('^[A-Za-z0-9][A-Za-z0-9_.-]*\Z')
+          - site_archive | length > 0
+          - site_release is match('^[A-Za-z0-9][A-Za-z0-9._-]*\Z')
+          - site_root.startswith('/') and site_root != '/' and not site_root.endswith('/')
+          - "'..' not in site_root.split('/')"
+          - lookup('ansible.builtin.env', 'COURSE_CD_TOKEN') | length > 0
+        quiet: true
+      no_log: true
+    - name: Проверить безопасное дерево готового student архива на controller
+      ansible.builtin.command:
+        argv: ["{{ ansible_playbook_python }}", -c, "import pathlib, sys, tarfile; t = tarfile.open(sys.argv[1]); members = t.getmembers(); assert members, 'Empty site archive'; assert all(not pathlib.PurePosixPath(m.name).is_absolute() and '..' not in pathlib.PurePosixPath(m.name).parts and (m.isfile() or m.isdir()) for m in members), 'Unsafe site archive'; assert any(pathlib.PurePosixPath(m.name) == pathlib.PurePosixPath('index.html') and m.isfile() for m in members), 'Missing site index'", "{{ site_archive }}"]
+      delegate_to: localhost
+      become: false
+      changed_when: false
+    - name: Создать корень student сайта
+      ansible.builtin.file:
+        path: "{{ site_root }}"
+        state: directory
+        mode: '0755'
+    # mkdir атомарен: чужой/прерванный deploy не снимает блокировку владельца.
+    - name: Захватить host lock поставки этого сайта
+      ansible.builtin.command:
+        argv: [mkdir, -m, '0700', --, "{{ site_root }}/.course-cd-lock"]
+      changed_when: true
+    - name: Подготовить и проверить выпуск до переключения сайта
+      block:
+        - name: Создать родительский каталог выпусков
+          ansible.builtin.file:
+            path: "{{ site_root }}/releases"
+            state: directory
+            mode: '0755'
+        - name: Зарезервировать новый каталог выпуска без повторного использования
+          ansible.builtin.command:
+            argv: [mkdir, -m, '0755', --, "{{ site_root }}/releases/{{ site_release }}"]
+          changed_when: true
+        - name: Доставить готовый student архив без private checks
+          ansible.builtin.unarchive:
+            src: "{{ site_archive }}"
+            dest: "{{ site_root }}/releases/{{ site_release }}"
+            mode: 'u=rwX,go=rX'
+        - name: Проверить index готового сайта
+          ansible.builtin.stat:
+            path: "{{ site_root }}/releases/{{ site_release }}/index.html"
+          register: site_index
+        - name: Отклонить неполную выдачу до native sync
+          ansible.builtin.assert:
+            that: site_index.stat.isreg | default(false)
+        - name: Запустить одну штатную Git-синхронизацию PrairieLearn
+          ansible.builtin.uri:
+            url: "{{ pl_url }}/pl/api/v1/course/{{ course_id }}/sync"
+            method: POST
+            headers:
+              Private-Token: "{{ lookup('ansible.builtin.env', 'COURSE_CD_TOKEN') }}"
+            status_code: 200
+          register: sync_request
+          changed_when: true
+          no_log: true
+        - name: Проверить ID запущенного задания
+          ansible.builtin.assert:
+            that: (sync_request.json.job_sequence_id | string) is match('^[1-9][0-9]*\Z')
+        - name: Дождаться конечного результата задания только GET запросами
+          ansible.builtin.uri:
+            url: "{{ pl_url }}/pl/api/v1/course/{{ course_id }}/sync/{{ sync_request.json.job_sequence_id }}"
+            headers:
+              Private-Token: "{{ lookup('ansible.builtin.env', 'COURSE_CD_TOKEN') }}"
+            status_code: 200
+          register: sync_result
+          until: sync_result.json.status in ['Success', 'Error', 'Stopped']
+          retries: 150
+          delay: 2
+          no_log: true
+        - name: Принять только успешную синхронизацию запрошенного задания
+          ansible.builtin.assert:
+            that:
+              - sync_result.json.status == 'Success'
+              - (sync_result.json.job_sequence_id | string) == (sync_request.json.job_sequence_id | string)
+            fail_msg: "Native sync не подтверждён; сайт не переключён."
+        - name: Проверить сохранённую native ревизию под штатным course lock
+          ansible.builtin.command:
+            argv: [docker, exec, -i, -w, /PrairieLearn/apps/prairielearn, "{{ pl_container }}", node, --input-type=module, '-', --course-id, "{{ course_id }}", --job-id, "{{ sync_request.json.job_sequence_id }}", --expected-commit, "{{ expected_native_commit }}"]
+            stdin: "{{ lookup('ansible.builtin.file', playbook_dir + '/../scripts/check-native-revision.mjs') }}"
+          changed_when: false
+        - name: Подготовить ссылку нового сайта
+          ansible.builtin.file:
+            src: "releases/{{ site_release }}"
+            dest: "{{ site_root }}/.current-pending"
+            state: link
+            force: true
+        - name: Атомарно переключить сайт после подтверждённой native ревизии
+          ansible.builtin.command:
+            argv: [mv, -Tf, "{{ site_root }}/.current-pending", "{{ site_root }}/current"]
+          changed_when: true
+      always:
+        - name: Освободить host lock завершённой поставки
+          ansible.builtin.command:
+            argv: [rmdir, --, "{{ site_root }}/.course-cd-lock"]
+          changed_when: true

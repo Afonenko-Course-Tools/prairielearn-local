@@ -1,0 +1,55 @@
+version: '3'
+
+vars:
+  COURSE: java
+  COURSE_ROOT: '{{if eq .COURSE "java"}}{{.ROOT_DIR}}/../Java{{else}}{{.ROOT_DIR}}/../System-Practice{{end}}'
+  PLATFORM_ROOT: '{{.ROOT_DIR}}/../prairielearn-platform'
+  OUTPUT_ROOT: '{{.ROOT_DIR}}/state/builds'
+  PROVIDERS_ROOT: '{{.ROOT_DIR | dir}}'
+  SITE_URL: '{{if eq .COURSE "java"}}http://127.0.0.1:8088/{{else}}http://127.0.0.1:8089/{{end}}'
+
+tasks:
+  check:
+    desc: Быстрые проверки Local без сборки курсов и запуска контейнеров
+    cmds:
+      - >-
+        python3 -c "import ast; from pathlib import Path; files = sorted(p for root in ('scripts', 'tests') for p in Path(root).rglob('*.py')); [ast.parse(p.read_text(), filename=str(p)) for p in files]; print(f'Python syntax: {len(files)} files')"
+      - python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - shellcheck config/start-pl.sh config/start-preview-pl.sh moodle/entrypoint.sh
+      - node --check scripts/bootstrap-admin.mjs
+      - node --check scripts/check-native-revision.mjs
+      - node --test tests/bootstrap-admin.test.mjs tests/native-revision.test.mjs
+  prepare:
+    desc: Собрать выбранный checkout и сохранить подготовленный выпуск
+    preconditions:
+      - sh: 'test "{{.COURSE}}" = java || test "{{.COURSE}}" = system-practice'
+        msg: 'COURSE: java или system-practice'
+    cmds:
+      - python3 scripts/prepare-course.py --course '{{.COURSE}}' --source '{{.COURSE_ROOT}}' --platform '{{.PLATFORM_ROOT}}' --output-root '{{.OUTPUT_ROOT}}' --site-url '{{.SITE_URL}}' {{if .PROVIDERS_ROOT}}--providers-root '{{.PROVIDERS_ROOT}}'{{end}}
+  resume-export:
+    desc: Повторить только export сохранённой prepare-группы после отказа
+    requires:
+      vars: [WORK_DIR]
+    cmds:
+      - python3 scripts/prepare-course.py --course '{{.COURSE}}' --resume-export '{{.WORK_DIR}}' --site-url '{{.SITE_URL}}' --platform '{{.PLATFORM_ROOT}}' --output-root '{{.OUTPUT_ROOT}}' {{if .PROVIDERS_ROOT}}--providers-root '{{.PROVIDERS_ROOT}}'{{end}}
+  receive:
+    desc: Установить готовые CI outputs без render/export, checks остаются controller
+    requires:
+      vars: [BUILD_DIR]
+    cmds:
+      - python3 scripts/prepare-course.py --course '{{.COURSE}}' --prepared '{{.BUILD_DIR}}' --platform '{{.PLATFORM_ROOT}}' --output-root '{{.OUTPUT_ROOT}}'
+  up:
+    desc: Запустить и загрузить уже подготовленный выпуск
+    cmds:
+      - python3 scripts/preview.py up --course '{{.COURSE}}' --platform '{{.PLATFORM_ROOT}}' --output-root '{{.OUTPUT_ROOT}}'
+  status:
+    cmds:
+      - python3 scripts/preview.py status --course '{{.COURSE}}' --platform '{{.PLATFORM_ROOT}}' --output-root '{{.OUTPUT_ROOT}}'
+  down:
+    desc: Остановить preview с сохранением данных
+    cmds:
+      - python3 scripts/preview.py down --course '{{.COURSE}}' --platform '{{.PLATFORM_ROOT}}' --output-root '{{.OUTPUT_ROOT}}'
+  verify:
+    desc: Полная проверка подготовленного выпуска на controller
+    cmds:
+      - go-task --dir '{{.COURSE_ROOT}}' verify PLATFORM_ROOT='{{.PLATFORM_ROOT}}' BUILD_DIR='{{.OUTPUT_ROOT}}/{{.COURSE}}/prepared'

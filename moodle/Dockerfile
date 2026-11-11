@@ -1,5 +1,5 @@
 # Официальный PHP и фиксированный выпуск Moodle; локальные образы не нужны.
-FROM php:8.4.27-apache-bookworm
+FROM php:8.4.27-apache-bookworm@sha256:5d55c49594dd833e2e4ff677b65f7d8ff48817f443a60691d9b2b382413bba42
 ARG MOODLE_VERSION=5.3
 ARG MOODLE_SHA256=7e5edf110555956571f40e42acffde0eb23681ebebd212a2fec0fe7d795dd511
 RUN apt-get update && apt-get install -y --no-install-recommends \
