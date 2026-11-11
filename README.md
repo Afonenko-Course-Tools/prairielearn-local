@@ -2,13 +2,14 @@
 
 Отдельный Docker Compose-стенд с PrairieLearn Community, тестовой Moodle, постоянными хранилищами и HTTPS-прокси. Gateway и Bridge подключаются только с уже подготовленными штатными конфигурациями. Базовый запуск не требует курса, registry, репозитория исходников или будущей CI/CD.
 
-**Готовность:** исходники инфраструктуры подготовлены; настоящий чистый запуск, сохранность после повторного `up` и TLS должен принять оператор. Подключённый override не означает приёмку Workspace или LTI. Работающий прежний стенд не используется как доказательство старта с нуля.
+**Готовность:** отдельная локальная приёмка чистого запуска, TLS/Moodle/LTI, ролей, Workspace и backup/restore выполнена на точных runtime images. Результаты и границы описаны в [отчёте приёмки](docs/local-acceptance-20261111.md). Для новой установки оператор повторяет её проверки; локальный опыт не заменяет hosted delivery или выбранный VM target.
 
 Для отдельного loopback dev-preview Java и System Practice доступны
 `go-task prepare COURSE=java` и `go-task up COURSE=java`. Подготовка сохраняет
 кандидата, успешная native-загрузка активирует его сайт. Этот режим и его
 проверки описаны в [инструкции preview](docs/preview.md) и
-[сборке и доставке](docs/build-delivery.md). Быстрый контроль Local — `go-task check`.
+[сборке и доставке](docs/build-delivery.md). Production Git-sync и готовый student-сайт описаны в
+[локальном production-маршруте](docs/production-local.md). Быстрый контроль Local — `go-task check`.
 
 ## Требования
 

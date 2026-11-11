@@ -118,7 +118,9 @@ native Git course. Нужны inventory group `course_cd`, `pl_url`, numeric
 произвольно выбранных оператором входов. Native release branch сохраняется
 неизменной на время доставки; внешние native writers исключаются оператором.
 Web server должен обслуживать
-`site_root/current`; его первоначальная установка остаётся задачей runtime.
+`site_root/current`; готовый loopback consumer предоставляет необязательный
+`compose.site.yml` с `SITE_ROOT=site_root`. Обычная Git-публикация и настройка
+consumer описаны в [production-маршруте](production-local.md).
 На target нужны Docker CLI и доступ к контейнеру native PrairieLearn.
 
 Play сначала проверяет архив на controller и распаковывает сайт в новый

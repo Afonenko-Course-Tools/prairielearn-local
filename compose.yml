@@ -1,6 +1,6 @@
 name: ${COMPOSE_PROJECT_NAME:-prairielearn-local}
 
-x-pl-image: &pl-image ${PL_IMAGE:-ghcr.io/afonenko-course-tools/prairielearn-community-gateway:2.5.8}
+x-pl-image: &pl-image ${PL_IMAGE:-ghcr.io/afonenko-course-tools/prairielearn-community-gateway@sha256:34f40dd37e26daee8c63212657d6a02601c7f1610bc8abe55ca133ec2dfde897}
 x-state: &state
   type: bind
   source: ${STATE_DIR:-./state}
@@ -96,7 +96,7 @@ services:
     restart: 'no'
 
   moodle-db:
-    image: ${POSTGRES_IMAGE:-postgres:17}
+    image: ${POSTGRES_IMAGE:-postgres@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f}
     environment:
       POSTGRES_DB: moodle
       POSTGRES_USER: moodle
