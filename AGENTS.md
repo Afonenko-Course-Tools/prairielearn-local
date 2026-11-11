@@ -32,3 +32,7 @@ START и docs/superpowers используются как справка без 
 Документацию и описания PR пишите по-русски по
 [общему правилу](https://github.com/Afonenko-Course-Tools/quarto-course/blob/main/docs/russian-language-policy.md),
 сохраняя технические идентификаторы буквально.
+
+Зависимости исходников оформляйте стандартными Git submodules, packages — штатными
+менеджерами (например, `quarto add`). Не создавайте собственные установщики
+пакетов, SHA manifests или матрицы lock-версий поверх этих механизмов.

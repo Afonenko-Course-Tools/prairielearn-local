@@ -1,11 +1,12 @@
 # Локальная инфраструктура PrairieLearn и Moodle
 
-Отдельный Docker Compose-стенд с PrairieLearn Community, тестовой Moodle, постоянными хранилищами и HTTPS-прокси. Gateway и Bridge подключаются только с уже подготовленными штатными конфигурациями. Базовый запуск не требует курса, registry, репозитория исходников или будущей CI/CD.
+Отдельный Docker Compose-стенд с PrairieLearn Community, тестовой Moodle, постоянными хранилищами и HTTPS-прокси. Gateway и Bridge подключаются только с уже подготовленными штатными конфигурациями. Базовый запуск не требует исходников курса или будущей CI/CD; dependency Platform
+получается штатным Git submodule, без собственного registry.
 
 **Готовность:** отдельная локальная приёмка чистого запуска, TLS/Moodle/LTI, ролей, Workspace и backup/restore выполнена на точных runtime images. Результаты и границы описаны в [отчёте приёмки](docs/local-acceptance-20261111.md). Для новой установки оператор повторяет её проверки; локальный опыт не заменяет hosted delivery или выбранный VM target.
 
 Для отдельного loopback dev-preview Java и System Practice доступны
-`go-task prepare COURSE=java` и `go-task up COURSE=java`. Подготовка сохраняет
+`go-task prepare COURSE=java COURSE_ROOT=/absolute/Java` и `go-task up COURSE=java`. Подготовка сохраняет
 кандидата, успешная native-загрузка активирует его сайт. Этот режим и его
 проверки описаны в [инструкции preview](docs/preview.md) и
 [сборке и доставке](docs/build-delivery.md). Production Git-sync и готовый student-сайт описаны в
@@ -25,9 +26,15 @@
 ```sh
 git clone https://github.com/Afonenko-Course-Tools/prairielearn-local.git
 cd prairielearn-local
+git submodule update --init deps/platform
 docker compose up -d --build --wait
 docker compose ps -a
 ```
+
+Default Community image берётся стандартным Compose `extends` из
+`deps/platform/compose/runtime.yml`; `PL_IMAGE` — явный production override.
+Другой проверенный Platform checkout можно задать через `PLATFORM_ROOT`.
+Образы grader и Workspace-сессии сохраняют свои отдельные роли.
 
 Базовый запуск использует значения по умолчанию и не требует `.env`. При необходимости скопируйте `.env.example` в `.env` **до запуска** и измените имя проекта, адреса, порты или пути. `STATE_DIR` по умолчанию — `./state`, host jobs — `${PWD}/state/jobs`; Compose запускают из каталога репозитория. Путь jobs должен быть абсолютным и доступным на том же Docker-хосте. Для повторного запуска используйте тот же каталог, имя проекта и state.
 

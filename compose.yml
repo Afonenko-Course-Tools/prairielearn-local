@@ -1,6 +1,5 @@
 name: ${COMPOSE_PROJECT_NAME:-prairielearn-local}
 
-x-pl-image: &pl-image ${PL_IMAGE:-ghcr.io/afonenko-course-tools/prairielearn-community-gateway@sha256:34f40dd37e26daee8c63212657d6a02601c7f1610bc8abe55ca133ec2dfde897}
 x-state: &state
   type: bind
   source: ${STATE_DIR:-./state}
@@ -22,8 +21,9 @@ x-moodle-env: &moodle-env
 
 services:
   config-init:
-    image: *pl-image
-    platform: linux/amd64
+    extends:
+      file: ${PLATFORM_ROOT:-./deps/platform}/compose/runtime.yml
+      service: community
     entrypoint: [/PrairieLearn/.venv/bin/python, /local/scripts/init-config.py, --state, /state]
     environment:
       PL_HOST: ${PL_HOST:-pl.infra.localhost}
@@ -41,8 +41,9 @@ services:
     restart: 'no'
 
   pl:
-    image: *pl-image
-    platform: linux/amd64
+    extends:
+      file: ${PLATFORM_ROOT:-./deps/platform}/compose/runtime.yml
+      service: community
     entrypoint: [bash, /local/config/start-pl.sh]
     environment:
       NODE_ENV: production
@@ -74,8 +75,9 @@ services:
     restart: unless-stopped
 
   bootstrap-admin:
-    image: *pl-image
-    platform: linux/amd64
+    extends:
+      file: ${PLATFORM_ROOT:-./deps/platform}/compose/runtime.yml
+      service: community
     network_mode: service:pl
     working_dir: /PrairieLearn/apps/prairielearn
     entrypoint: [sh, -ec]

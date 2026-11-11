@@ -384,7 +384,7 @@ def main() -> None:
     parser.add_argument('--course', choices=PORTS, default='java')
     parser.add_argument('--output-root', type=Path, default=ROOT / 'state/builds')
     parser.add_argument('--state-dir', type=Path)
-    parser.add_argument('--platform', type=Path, default=ROOT.parent / 'prairielearn-platform')
+    parser.add_argument('--platform', type=Path, default=ROOT / 'deps/platform')
     parser.add_argument('--port', type=int)
     parser.add_argument('--project')
     parser.add_argument('--timeout', type=int, default=600)
@@ -402,6 +402,8 @@ def main() -> None:
     origin = f'http://127.0.0.1:{port}'
     env = dict(os.environ, PREVIEW_OUTPUT_ROOT=str(output), PREVIEW_STATE_DIR=str(state),
                PREVIEW_JOBS_DIR=str(state / 'jobs'), PREVIEW_PLATFORM_ROOT=str(platform), PREVIEW_PORT=str(port))
+    # PL_IMAGE принадлежит production; preview override остаётся независимым.
+    env['PL_IMAGE'] = os.environ.get('PL_PREVIEW_IMAGE', '')
     # Не читать production .env; preview имеет собственный project и volumes.
     compose = ['docker', 'compose', '--env-file', '/dev/null', '-p', project, '-f', str(ROOT / 'compose.preview.yml')]
     if args.command == 'down':

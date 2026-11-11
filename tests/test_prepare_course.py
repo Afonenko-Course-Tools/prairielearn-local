@@ -160,11 +160,15 @@ class PublicationTests(unittest.TestCase):
         source_config = 'subprojects: []\nwebsite:\n  site-url: https://example.org/course/\n  navbar:\n    left:\n      - href: https://example.org/course/theory/\n'
         (source / '_quarto.yml').write_text(source_config)
         (source / 'index.qmd').write_text('source retained')
-        providers = self.root / 'providers'
-        providers.mkdir()
-        (providers / 'package.txt').write_text('original provider')
+        package = source / '_extensions/org/example/_extension.yml'
+        package.parent.mkdir(parents=True)
+        package.write_text('title: installed package\n')
+        for dependency in ('.platform', '.ci/performance'):
+            path = source / dependency / 'source.txt'
+            path.parent.mkdir(parents=True)
+            path.write_text('external tool source')
         base_args = ['prepare-course.py', '--course', 'java', '--platform', str(source),
-                     '--output-root', str(self.root / 'builds'), '--providers-root', str(providers)]
+                     '--output-root', str(self.root / 'builds')]
 
         def fail_export(command, *, cwd, env):
             result = cwd.parent / 'result'
@@ -174,26 +178,25 @@ class PublicationTests(unittest.TestCase):
 
         with patch.object(prepare.sys, 'argv', base_args + ['--source', str(source), '--site-url', 'http://localhost/']), \
              patch.object(prepare.shutil, 'which', return_value='/bin/true'), \
-             patch.object(prepare, 'candidate_providers'), \
              patch.object(prepare, 'run', side_effect=fail_export):
             with self.assertRaises(prepare.subprocess.CalledProcessError):
                 prepare.main()
         work, = (self.root / 'builds-work/java').glob('.prepare-*')
         self.assertEqual((work / 'source/index.qmd').read_text(), 'source retained')
+        self.assertFalse((work / 'source/.platform').exists())
+        self.assertFalse((work / 'source/.ci').exists())
         self.assertEqual((source / '_quarto.yml').read_text(), source_config)
         self.assertEqual((work / 'result/site/index.html').read_text(), 'student bytes')
         frozen_metadata = (work / 'source/_quarto.yml').read_bytes()
         frozen_profile = (work / 'source/_quarto-preview.yml').read_bytes()
-        for extra in (['--site-url', 'http://localhost:8099/'],
-                      ['--providers-root', str(self.root / 'other-providers')]):
+        self.assertEqual((work / 'source/_extensions/org/example/_extension.yml').read_text(), 'title: installed package\n')
+        for extra in (['--site-url', 'http://localhost:8099/'],):
             with self.subTest(extra=extra), \
                  patch.object(prepare.sys, 'argv', base_args + ['--resume-export', str(work)] + extra), \
                  patch.object(prepare.shutil, 'which', return_value='/bin/true'), \
-                 patch.object(prepare, 'candidate_providers') as install, \
                  patch.object(prepare, 'run') as export:
                 with self.assertRaisesRegex(ValueError, 'свежий prepare'):
                     prepare.main()
-                install.assert_not_called()
                 export.assert_not_called()
             self.assertEqual((work / 'source/_quarto.yml').read_bytes(), frozen_metadata)
             self.assertEqual((work / 'source/_quarto-preview.yml').read_bytes(), frozen_profile)
@@ -209,18 +212,25 @@ class PublicationTests(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text('{}')
 
-        # Taskfile passes the same providers root and URL by default. Changed
-        # working-tree provider bytes must not leak into this exporter-only retry.
-        (providers / 'package.txt').write_text('changed provider after render')
+        # Source package changes after render cannot affect frozen exporter retry.
+        package.write_text('title: changed after render\n')
+        # Legacy provenance from a previously frozen failed prepare remains read-only.
+        import json
+        context = work / '.prepare-context.json'
+        self.assertEqual(json.loads(context.read_text()), {'site_url': 'http://localhost/'})
+        context.write_text(json.dumps({'site_url': 'http://localhost/',
+                                       'providers_root': str(self.root / 'no-longer-existing-source')}))
+        legacy_context = context.read_bytes()
+        frozen_package = work / 'source/_extensions/org/example/_extension.yml'
+        self.assertEqual(frozen_package.read_text(), 'title: installed package\n')
         with patch.object(prepare.sys, 'argv', base_args + ['--resume-export', str(work), '--site-url', 'http://localhost']), \
              patch.object(prepare.shutil, 'which', return_value='/bin/true'), \
-             patch.object(prepare, 'candidate_providers') as install, \
              patch.object(prepare, 'preview_profiles') as profiles, \
              patch.object(prepare, 'run', side_effect=export_only):
             prepare.main()
-            install.assert_not_called()
             profiles.assert_not_called()
         self.assertEqual([command[1] for command in commands], ['export'])
+        self.assertEqual(context.read_bytes(), legacy_context)
         self.assertEqual((self.course / 'prepared/site/index.html').read_text(), 'student bytes')
         self.assertFalse((self.course / 'active').exists())
         self.assertFalse((self.course / 'current').exists())
@@ -230,12 +240,12 @@ class PublicationTests(unittest.TestCase):
         work = self.root / 'saved'
         work.mkdir()
         with self.assertRaisesRegex(ValueError, 'свежий prepare'):
-            prepare.resume_context(work, 'http://localhost/', None)
+            prepare.resume_context(work, 'http://localhost/')
         outside = self.root / 'context.json'
-        outside.write_text('{"site_url":"http://localhost/","providers_root":null}')
+        outside.write_text('{"site_url":"http://localhost/"}')
         (work / '.prepare-context.json').symlink_to(outside)
         with self.assertRaisesRegex(ValueError, 'свежий prepare'):
-            prepare.resume_context(work, 'http://localhost/', None)
+            prepare.resume_context(work, 'http://localhost/')
 
     def test_sibling_generated_roots_cannot_mutate_canonical_source(self):
         from unittest.mock import patch
@@ -348,10 +358,10 @@ class PublicationTests(unittest.TestCase):
         platform = self.root / 'platform'
         platform.mkdir()
         (platform / 'runtime-profiles.json').write_text('{}')
-        repos = SCRIPT.parents[2]
-        if any(not (repos / course / 'Taskfile.yml').is_file() for course in ('Java', 'System-Practice')):
-            self.skipTest('Проверка export profile требует соседние checkout Java и System-Practice')
-        for course in ('Java', 'System-Practice'):
+        courses = {name: Path(os.environ[name]) for name in ('JAVA_ROOT', 'SP_ROOT') if os.environ.get(name)}
+        if len(courses) != 2:
+            self.skipTest('Проверка course export требует явные JAVA_ROOT и SP_ROOT')
+        for course, checkout in courses.items():
             for local in ('0', '1'):
                 with self.subTest(course=course, local=local):
                     output = self.root / (course + local)
@@ -359,7 +369,7 @@ class PublicationTests(unittest.TestCase):
                     env = dict(os.environ, PATH=str(binary) + os.pathsep + os.environ['PATH'],
                                PROFILE_LOG=str(log), COURSE_PREVIEW_PROFILE=local,
                                QUARTO_PROFILE='custom')
-                    subprocess.run([task, '--dir', str(repos / course), 'export',
+                    subprocess.run([task, '--dir', str(checkout), 'export',
                                     'BUILD_DIR=' + str(output), 'PLATFORM_ROOT=' + str(platform)],
                                    env=env, check=True, capture_output=True, text=True)
                     self.assertEqual(log.read_text(), 'preview' if local == '1' else 'custom')

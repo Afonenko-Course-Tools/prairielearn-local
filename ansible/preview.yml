@@ -8,13 +8,16 @@
     course: java
     output_root: "{{ local_root }}/state/builds"
     prepare_course: true
-    providers_root: "{{ local_root | dirname }}"
-    course_root: "{{ local_root }}/../{{ 'Java' if course == 'java' else 'System-Practice' }}"
   tasks:
     - name: Проверить системный go-task controller
       ansible.builtin.command:
         argv: [go-task, --version]
       changed_when: false
+    - name: Проверить явный путь исходников курса
+      ansible.builtin.assert:
+        that: course_root is defined and course_root is abs
+        fail_msg: "Для подготовки нужен -e course_root=/абсолютный/checkout"
+      when: prepare_course | bool
     - name: Подготовить выбранный курс один раз
       ansible.builtin.command:
         argv:
@@ -25,7 +28,6 @@
           - "COURSE={{ course }}"
           - "OUTPUT_ROOT={{ output_root }}"
           - "COURSE_ROOT={{ course_root }}"
-          - "PROVIDERS_ROOT={{ providers_root }}"
       when: prepare_course | bool
     - name: Запустить готовый выпуск и дождаться native load
       ansible.builtin.command:
