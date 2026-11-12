@@ -22,8 +22,9 @@ services:
         bind: {create_host_path: false}
 
   workspace-host:
-    image: ${PL_IMAGE:-ghcr.io/afonenko-course-tools/prairielearn-community-gateway@sha256:34f40dd37e26daee8c63212657d6a02601c7f1610bc8abe55ca133ec2dfde897}
-    platform: linux/amd64
+    extends:
+      file: ${PLATFORM_ROOT:-./deps/platform}/compose/runtime.yml
+      service: community
     network_mode: service:pl
     working_dir: /PrairieLearn
     entrypoint: [sh, -ec]

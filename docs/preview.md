@@ -1,7 +1,9 @@
 # Локальный dev preview
 
-`go-task prepare COURSE=java` готовит сайт и native пакет, `go-task up COURSE=java`
-запускает их. Для System Practice используется `COURSE=system-practice`.
+`go-task prepare COURSE=java COURSE_ROOT=/absolute/Java` готовит сайт и native пакет, `go-task up COURSE=java`
+запускает их. Для System Practice используется `COURSE=system-practice` с
+явным `COURSE_ROOT=/absolute/System-Practice`. Перед сборкой установите Quarto
+packages штатными командами курса; Local их не устанавливает.
 По умолчанию сайт и `/pl/` доступны на `http://127.0.0.1:8088` для Java,
 на `http://127.0.0.1:8089` для System Practice.
 
@@ -20,6 +22,13 @@ python3 scripts/preview.py down --course java
 готовые выходы и не запускает render/export. `load` загружает подготовленный
 выпуск в уже работающем runtime. `ready` проверяет HTTP PL и сайта и требует
 успешного состояния загрузки; результат server job проверяют `up` и `load`.
+
+Platform CLI и default Community image поставляются submodule `deps/platform`
+(`git submodule update --init deps/platform`). Preview берёт image через
+стандартный Compose `extends` того же producer fragment, что production.
+`PL_PREVIEW_IMAGE` независимо переопределяет preview image; production `PL_IMAGE`
+и `.env` не влияют на этот выбор. `--platform` выбирает другой явный checkout
+и для CLI, и для Compose fragment.
 
 Самостоятельный `compose.preview.yml` использует существующий Community image
 с native `/PrairieLearn/scripts/init.sh`, `devMode:true`, `hasShib:false` и

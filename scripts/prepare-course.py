@@ -4,7 +4,6 @@ import argparse
 from contextlib import contextmanager
 import fcntl
 import json
-import importlib.util
 import os
 from pathlib import Path
 import shutil
@@ -127,36 +126,6 @@ def preview_profiles(checkout: Path, site_url: str) -> None:
         (child / '_quarto-preview.yml').write_text(json.dumps(value) + '\n')
 
 
-def candidate_providers(checkout: Path, providers_root: Path) -> None:
-    """Повторно используем mappings/safe paths штатного course installer."""
-    installer = checkout / 'tools/materialize-providers.py'
-    spec = importlib.util.spec_from_file_location('course_providers', installer)
-    if spec is None or spec.loader is None:
-        raise ValueError('Не найден штатный installer providers')
-    module = importlib.util.module_from_spec(spec)
-    sys.path.insert(0, str(installer.parent))
-    try:
-        spec.loader.exec_module(module)
-        parsed = module.read_providers(checkout / 'providers.json')
-    finally:
-        sys.path.pop(0)
-    namespace, providers = parsed if isinstance(parsed, tuple) else (parsed['namespace'], parsed['providers'])
-    for provider in providers.values():
-        repo = module.safe(providers_root, provider['checkout'])
-        subprocess.run(['git', '-C', str(repo), 'log', '-1', '--format=provider %H %s'], check=True)
-        subprocess.run(['git', '-C', str(repo), 'diff', '--stat'], check=True)
-        for package, scopes in provider['packages'].items():
-            source = module.safe(repo, '_extensions/' + package)
-            if not (source / '_extension.yml').is_file():
-                raise ValueError('Нет полного package: ' + str(source))
-            for scope in scopes:
-                target = module.safe(checkout, str(Path(scope) / '_extensions' / namespace / package))
-                if target.exists():
-                    shutil.rmtree(target)
-                shutil.copytree(source, target)
-                print(f'provider: {source} -> {target}', flush=True)
-
-
 def real_directory(path: Path, *, create: bool = False) -> None:
     """Отклонить ссылки во всех компонентах до создания generated каталогов."""
     if not path.is_absolute() or '..' in path.parts:
@@ -235,22 +204,24 @@ def mutation_lock(course: Path):
         yield
 
 
-def resume_context(work: Path, site_url: str | None, providers_root: Path | None) -> None:
-    """Retry только export: frozen checkout/providers и уже готовый student site."""
+def resume_context(work: Path, site_url: str | None) -> None:
+    """Retry только export: frozen checkout/packages и уже готовый student site."""
     path = work / '.prepare-context.json'
     if path.is_symlink() or not path.is_file():
         raise ValueError('Нет origin provenance для resume-export; нужен свежий prepare')
     context = json.loads(path.read_text())
-    if (not isinstance(context, dict) or set(context) != {'site_url', 'providers_root'}
+    # Старые workdirs уже содержат выбранные bytes: provenance читается,
+    # но packages не переустанавливаются и прежний source API не восстанавливается.
+    if (not isinstance(context, dict)
+            or set(context) not in ({'site_url'}, {'site_url', 'providers_root'})
             or not isinstance(context['site_url'], str)
-            or (context['providers_root'] is not None and not isinstance(context['providers_root'], str))):
+            or ('providers_root' in context and context['providers_root'] is not None
+                and not isinstance(context['providers_root'], str))):
         raise ValueError('Некорректный origin provenance; нужен свежий prepare')
     if normalized_site_url(context['site_url']) != context['site_url']:
         raise ValueError('Некорректный origin provenance; нужен свежий prepare')
     if site_url is not None and normalized_site_url(site_url) != context['site_url']:
         raise ValueError('resume-export не меняет --site-url; нужен свежий prepare')
-    if providers_root is not None and str(providers_root.resolve()) != context['providers_root']:
-        raise ValueError('resume-export не меняет --providers-root; нужен свежий prepare')
 
 
 def build_environment(work: Path) -> dict[str, str]:
@@ -271,7 +242,6 @@ def main() -> None:
     parser.add_argument('--platform', required=True, type=Path)
     parser.add_argument('--output-root', required=True, type=Path)
     parser.add_argument('--site-url')
-    parser.add_argument('--providers-root', type=Path)
     args = parser.parse_args()
     source = args.source.resolve(strict=True) if args.source else None
     if args.prepared is not None and args.resume_export is not None:
@@ -313,8 +283,8 @@ def main() -> None:
                 real_directory(checkout)
                 if not (checkout / 'Taskfile.yml').is_file() or not (work / 'result/site/index.html').is_file():
                     raise ValueError('Нет сохранённого checkout/готового student site для resume-export')
-                resume_context(work, args.site_url, args.providers_root)
-                print('resume-export: frozen checkout/providers/student site; повторяется только export с текущим Platform', flush=True)
+                resume_context(work, args.site_url)
+                print('resume-export: frozen checkout/packages/student site; повторяется только export с текущим Platform', flush=True)
                 run(['go-task', 'export', 'PLATFORM_ROOT=' + str(platform),
                      'BUILD_DIR=' + str(work / 'result')], cwd=checkout, env=build_environment(work))
                 publish(work / 'result', course)
@@ -333,20 +303,14 @@ def main() -> None:
                 print(f'receive: кандидат {course}/prepared; для загрузки нужен up', flush=True)
                 completed = True
                 return
-            if args.providers_root is not None:
-                print(f'prepare: providers mode=working-tree; root={args.providers_root.resolve()}', flush=True)
-            else:
-                print('prepare: providers mode=installed; используются packages checkout, совместимость квалифицируется отдельно', flush=True)
+            print('prepare: используются установленные packages checkout курса', flush=True)
             print(f'prepare: одноразовый checkout {checkout}', flush=True)
             shutil.copytree(source, checkout, symlinks=True, ignore=shutil.ignore_patterns(
-                '.git', 'node_modules', '.quarto', '.qrc', '_site*', '_output',
+                '.git', '.platform', '.ci', 'node_modules', '.quarto', '.qrc', '_site*', '_output',
                 '_generated', '_downloads', '_freeze', '__pycache__', '.gradle'))
-            if args.providers_root is not None:
-                candidate_providers(checkout, args.providers_root.resolve(strict=True))
             preview_profiles(checkout, args.site_url)
             (work / '.prepare-context.json').write_text(json.dumps({
                 'site_url': normalized_site_url(args.site_url),
-                'providers_root': str(args.providers_root.resolve(strict=True)) if args.providers_root else None,
             }) + '\n')
             env = build_environment(work)
             run(['go-task', 'build', 'PLATFORM_ROOT=' + str(platform),

@@ -1,8 +1,9 @@
 # Отдельный dev preview: не объединять с production compose.yml.
 services:
   pl:
-    image: ${PL_PREVIEW_IMAGE:-ghcr.io/afonenko-course-tools/prairielearn-community-gateway@sha256:34f40dd37e26daee8c63212657d6a02601c7f1610bc8abe55ca133ec2dfde897}
-    platform: linux/amd64
+    extends:
+      file: ${PREVIEW_PLATFORM_ROOT:?}/compose/runtime.yml
+      service: community
     entrypoint: [bash, /local/start-preview-pl.sh]
     environment:
       NODE_ENV: development

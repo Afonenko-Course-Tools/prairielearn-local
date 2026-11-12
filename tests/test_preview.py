@@ -13,6 +13,20 @@ SPEC.loader.exec_module(preview)
 
 
 class PreviewConfigTest(unittest.TestCase):
+    def test_preview_image_override_is_independent_of_production_environment(self):
+        for image in ('', 'example.invalid/reviewed-preview:fixture'):
+            with self.subTest(image=image), \
+                 patch.dict(preview.os.environ, {'PL_IMAGE': 'production-only',
+                                                'PL_PREVIEW_IMAGE': image}), \
+                 patch.object(preview.sys, 'argv', ['preview.py', 'down']), \
+                 patch.object(preview, 'run') as run:
+                preview.main()
+                self.assertEqual(run.call_args.kwargs['env']['PL_IMAGE'], image)
+                command = run.call_args.args[0]
+                self.assertEqual(command[command.index('--env-file') + 1], '/dev/null')
+                self.assertEqual(run.call_args.kwargs['env']['PREVIEW_PLATFORM_ROOT'],
+                                 str(preview.ROOT / 'deps/platform'))
+
     def test_repeat_up_preserves_keys_and_stable_course_path(self):
         with tempfile.TemporaryDirectory() as temporary:
             state = Path(temporary)

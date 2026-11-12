@@ -2,11 +2,13 @@
 
 На Arch пакет `go-task` устанавливает команду `go-task`. Системные `quarto`,
 `tsc`, `pyright`, `shellcheck`, Python с PyYAML/jsonschema должны быть в PATH.
-Java и System Practice размещаются рядом с Local, Platform и полным набором
-исходников расширений; иной checkout задаётся через `COURSE_ROOT`.
+Platform CLI поставляется submodule `deps/platform`: после clone выполните
+`git submodule update --init deps/platform`. Java и System Practice — внешние
+входы: передайте абсолютный `COURSE_ROOT` checkout с уже установленными
+Quarto packages. Infrastructure/runtime consumer не получает исходники курсов.
 
 ```sh
-go-task prepare COURSE=java
+go-task prepare COURSE=java COURSE_ROOT=/absolute/Java
 go-task up COURSE=java
 ```
 
@@ -17,15 +19,28 @@ go-task up COURSE=java
 строит сайт; отдельный export выполняет полный author capture для native.
 Полный HTML-сайт перед export не строится.
 
-`PROVIDERS_ROOT` по умолчанию указывает на родителя Local. Полные packages
-в одноразовой копии устанавливаются из working trees соседних расширений;
-неполный набор вызывает явный отказ. `PROVIDERS_ROOT=/абсолютный/путь`
-выбирает иной полный набор. Выбранный mode и путь печатаются перед сборкой. Mapping
-берётся штатным installer из `providers.json`; HEAD и dirty diff печатаются
-в журнал. Канонические исходники и их установленные packages сохраняются.
-Для standalone checkout `PROVIDERS_ROOT=''` явно выбирает установленный
-набор packages самого курса. Совместимость этого набора квалифицируется
-отдельно; успех сборки с соседними working trees её не подтверждает.
+Local не устанавливает packages. Обычный `prepare` копирует установленный
+`_extensions` курса вместе с исходниками; соседние расширения не нужны.
+Обновление выполняет владелец курса заранее штатным `quarto add`. Для совместной
+разработки сначала явно установите выбранную GitHub dev-ветку тем же механизмом,
+сохраняя namespace владельца и hook paths курса, затем запустите `prepare`:
+
+```sh
+cd /absolute/Java
+quarto add Afonenko-Course-Tools/quarto-course-prairielearn@dev-branch --no-prompt
+cd /absolute/prairielearn-local
+go-task prepare COURSE=java COURSE_ROOT=/absolute/Java
+```
+
+Вместо `dev-branch` укажите выбранную опубликованную ветку производителя.
+Для локального изменения bytes можно править установленные packages курса
+непосредственно. `quarto add /absolute/checkout` создаёт иной layout: такой
+переход требует свежей установки и явного согласования всех hook paths курса.
+Для subprojects установите package также в требуемых project scopes по
+инструкциям курса. Local не выбирает версии, не читает source manifests и
+не заменяет установленные packages рабочими деревьями автоматически.
+`PLATFORM_ROOT=/absolute/platform` явно выбирает иной проверенный Platform
+checkout вместо gitlink; обновление default выполняется обычными Git средствами.
 
 Готовые выдачи находятся под `state/builds/COURSE`. `prepare`, `receive` и
 `resume-export` переключают только `prepared`, кандидата на загрузку.
@@ -43,11 +58,13 @@ go-task resume-export COURSE=java WORK_DIR=/абсолютный/путь/state/
 ```
 
 Повтор использует сохранённые checkout, packages, профиль и student bytes.
-Изменения исходного дерева providers по тому же пути не устанавливаются повторно.
-Другой `SITE_URL` или `PROVIDERS_ROOT` отклоняется; применение изменений
+Изменения исходного checkout курса и его packages не копируются повторно.
+Другой `SITE_URL` отклоняется; применение изменений
 render-входов требует нового `prepare`. Это узкий повтор экспорта текущим
 Platform, например после исправления его writer. Старые незавершённые группы
-без сохранённых параметров требуют нового `prepare`.
+без сохранённых параметров требуют нового `prepare`. Прежний context с origin
+поддерживается только для чтения: сохранённые packages не переустанавливаются,
+старый source path не используется и context не переписывается.
 Успешный resume удаляет disposable исходники и публикует кандидата с сохранённым
 сайтом и новым native output. Пути releases,
 work и private checks отклоняются при ссылках в любом компоненте; controller
@@ -70,7 +87,7 @@ profile, поскольку Quarto объединяет его массивы. �
 сохраняются. Авторские поля профиля `full` сохраняются.
 
 ```sh
-go-task verify COURSE=java
+go-task verify COURSE=java COURSE_ROOT=/absolute/Java
 ```
 
 Это отдельные полные проверки declared и delivery тех же native/checks/registry.
@@ -106,7 +123,7 @@ bytes как `prepared` без render/export. Последующий `up` заг
 
 `ansible/preview.yml` выполняется один раз на controller с local connection.
 Он использует установленные инструменты Arch и обычные `go-task prepare/up`.
-Например, `ansible-playbook ansible/preview.yml -e course=java`.
+Например, `ansible-playbook ansible/preview.yml -e course=java -e course_root=/absolute/Java`.
 Для готовой выдачи задайте `-e prepare_course=false`.
 
 `ansible/deploy.yml` потребляет готовый student `site.tar` и уже опубликованный
@@ -145,4 +162,4 @@ Production Ubuntu provisioning и пользовательские accounts эт
 ShellCheck и Node-проверки служебных входов. Та же команда блокирует ошибки в
 `.github/workflows/check.yml`. Курсовые render/export и Docker в неё не входят.
 Межрепозиторная проверка course Taskfiles явно пропускается в отдельном clone
-Local без соседних курсов; основной набор Local выполняется полностью.
+Local без явно заданных `JAVA_ROOT` и `SP_ROOT`; основной набор Local выполняется полностью.
