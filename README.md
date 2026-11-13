@@ -133,3 +133,6 @@ php -l scripts/moodle-bootstrap.php
 Проверки и форматирование всех собственных технических файлов:
 `go-task check`, `go-task format`. Установка инструментов, безопасная статическая
 проверка Compose и контекст точечных исключений описаны в [docs/quality.md](docs/quality.md).
+
+Общая рабочая среда и системные пакеты Arch описаны в
+[руководстве Core](https://github.com/Afonenko-Course-Tools/quarto-course/blob/main/docs/development-arch.md).
