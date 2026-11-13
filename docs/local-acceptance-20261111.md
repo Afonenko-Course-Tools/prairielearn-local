@@ -17,12 +17,12 @@ artifact IDs или публикации в окончательном Git remot
 
 Проверенные неизменяемые runtime:
 
-| Компонент | Identity |
-| --- | --- |
-| Community 2.5.8 | `ghcr.io/afonenko-course-tools/prairielearn-community-gateway@sha256:f7d1903532e813fe29df74949da7131a353710ff7d0d632a51482762422dcb82` |
-| Gateway v3.0.1 | `ghcr.io/afonenko-course-tools/moodle-prairielearn-gateway@sha256:9a46942a4085bcf4294647b2f5461fb9dc328fc610214a0b627b75ded7f75f87` |
-| Moodle PostgreSQL 17.11 | `postgres@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f` |
-| Git Workspace | `ghcr.io/afonenko-course-tools/sp-git-workspace@sha256:465bf16061c3a44afdc61c77d1dd853216be35b0203072cb8e7c69a51a1bf31a` |
+| Компонент               | Identity                                                                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Community 2.5.8         | `ghcr.io/afonenko-course-tools/prairielearn-community-gateway@sha256:f7d1903532e813fe29df74949da7131a353710ff7d0d632a51482762422dcb82` |
+| Gateway v3.0.1          | `ghcr.io/afonenko-course-tools/moodle-prairielearn-gateway@sha256:9a46942a4085bcf4294647b2f5461fb9dc328fc610214a0b627b75ded7f75f87`    |
+| Moodle PostgreSQL 17.11 | `postgres@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f`                                                     |
+| Git Workspace           | `ghcr.io/afonenko-course-tools/sp-git-workspace@sha256:465bf16061c3a44afdc61c77d1dd853216be35b0203072cb8e7c69a51a1bf31a`               |
 
 Moodle 5.3 собрана из закреплённого TGZ SHA-256
 `7e5edf110555956571f40e42acffde0eb23681ebebd212a2fec0fe7d795dd511`,

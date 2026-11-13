@@ -2,12 +2,15 @@
 FROM php:8.4.27-apache-bookworm@sha256:5d55c49594dd833e2e4ff677b65f7d8ff48817f443a60691d9b2b382413bba42
 ARG MOODLE_VERSION=5.3
 ARG MOODLE_SHA256=7e5edf110555956571f40e42acffde0eb23681ebebd212a2fec0fe7d795dd511
+# Debian security updates остаются доступны без устаревающего lock пакетов.
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl util-linux libfreetype6-dev libicu-dev \
       libjpeg62-turbo-dev libpng-dev libpq-dev libxml2-dev libzip-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j2 exif gd intl pgsql pdo_pgsql soap zip \
     && rm -rf /var/lib/apt/lists/*
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN curl --fail --show-error --location --retry 3 \
       "https://download.moodle.org/download.php/direct/stable503/moodle-${MOODLE_VERSION}.tgz" \
       --output /tmp/moodle.tgz \

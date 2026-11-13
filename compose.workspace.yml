@@ -8,8 +8,7 @@ services:
         source: ${PL_CONFIG_FILE:?Нужен готовый native PL config для Workspace}
         target: /run/pl-native/config.json
         read_only: true
-        bind: {create_host_path: false}
-
+        bind: { create_host_path: false }
 
   bootstrap-admin:
     environment:
@@ -19,7 +18,7 @@ services:
         source: ${PL_CONFIG_FILE:?Нужен готовый native PL config}
         target: /run/pl-native/config.json
         read_only: true
-        bind: {create_host_path: false}
+        bind: { create_host_path: false }
 
   workspace-host:
     extends:
@@ -44,9 +43,9 @@ services:
       - type: bind
         source: ${WORKSPACE_DOCKER_SOCKET:?Нужен выделенный Docker socket}
         target: /var/run/docker.sock
-        bind: {create_host_path: false}
+        bind: { create_host_path: false }
     depends_on:
-      bootstrap-admin: {condition: service_completed_successfully}
+      bootstrap-admin: { condition: service_completed_successfully }
     mem_limit: 768m
     cpus: 1
     restart: unless-stopped

@@ -29,6 +29,7 @@
           - "OUTPUT_ROOT={{ output_root }}"
           - "COURSE_ROOT={{ course_root }}"
       when: prepare_course | bool
+      changed_when: true
     - name: Запустить готовый выпуск и дождаться native load
       ansible.builtin.command:
         argv:
@@ -39,6 +40,7 @@
           - "COURSE={{ course }}"
           - "OUTPUT_ROOT={{ output_root }}"
       register: preview_result
+      changed_when: true
     - name: Показать адреса готового preview
       ansible.builtin.debug:
         var: preview_result.stdout_lines

@@ -129,3 +129,10 @@ php -l scripts/moodle-bootstrap.php
 ```
 
 Проверки initial administrator заменяют native зависимости моделями в памяти: они проверяют первый grant, read-success существующего administrator и отказы без изменения прав, но не соединение с настоящей БД. Source-проверки не заменяют отдельную приёмку пустых хранилищ, повторного `up`, TLS и, при подключении, LTI/Workspace.
+
+Проверки и форматирование всех собственных технических файлов:
+`go-task check`, `go-task format`. Установка инструментов, безопасная статическая
+проверка Compose и контекст точечных исключений описаны в [docs/quality.md](docs/quality.md).
+
+Общая рабочая среда и системные пакеты Arch описаны в
+[руководстве Core](https://github.com/Afonenko-Course-Tools/quarto-course/blob/main/docs/development-arch.md).

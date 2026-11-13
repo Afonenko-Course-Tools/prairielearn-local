@@ -21,7 +21,13 @@
       no_log: true
     - name: Проверить безопасное дерево готового student архива на controller
       ansible.builtin.command:
-        argv: ["{{ ansible_playbook_python }}", -c, "import pathlib, sys, tarfile; t = tarfile.open(sys.argv[1]); members = t.getmembers(); assert members, 'Empty site archive'; assert all(not pathlib.PurePosixPath(m.name).is_absolute() and '..' not in pathlib.PurePosixPath(m.name).parts and (m.isfile() or m.isdir()) for m in members), 'Unsafe site archive'; assert any(pathlib.PurePosixPath(m.name) == pathlib.PurePosixPath('index.html') and m.isfile() for m in members), 'Missing site index'", "{{ site_archive }}"]
+        argv:
+          [
+            "{{ ansible_playbook_python }}",
+            -c,
+            "import pathlib, sys, tarfile; t = tarfile.open(sys.argv[1]); members = t.getmembers(); assert members, 'Empty site archive'; assert all(not pathlib.PurePosixPath(m.name).is_absolute() and '..' not in pathlib.PurePosixPath(m.name).parts and (m.isfile() or m.isdir()) for m in members), 'Unsafe site archive'; assert any(pathlib.PurePosixPath(m.name) == pathlib.PurePosixPath('index.html') and m.isfile() for m in members), 'Missing site index'",
+            "{{ site_archive }}",
+          ]
       delegate_to: localhost
       become: false
       changed_when: false
@@ -29,11 +35,11 @@
       ansible.builtin.file:
         path: "{{ site_root }}"
         state: directory
-        mode: '0755'
+        mode: "0755"
     # mkdir атомарен: чужой/прерванный deploy не снимает блокировку владельца.
     - name: Захватить host lock поставки этого сайта
       ansible.builtin.command:
-        argv: [mkdir, -m, '0700', --, "{{ site_root }}/.course-cd-lock"]
+        argv: [mkdir, -m, "0700", --, "{{ site_root }}/.course-cd-lock"]
       changed_when: true
     - name: Подготовить и проверить выпуск до переключения сайта
       block:
@@ -41,16 +47,23 @@
           ansible.builtin.file:
             path: "{{ site_root }}/releases"
             state: directory
-            mode: '0755'
+            mode: "0755"
         - name: Зарезервировать новый каталог выпуска без повторного использования
           ansible.builtin.command:
-            argv: [mkdir, -m, '0755', --, "{{ site_root }}/releases/{{ site_release }}"]
+            argv:
+              [
+                mkdir,
+                -m,
+                "0755",
+                --,
+                "{{ site_root }}/releases/{{ site_release }}",
+              ]
           changed_when: true
         - name: Доставить готовый student архив без private checks
           ansible.builtin.unarchive:
             src: "{{ site_archive }}"
             dest: "{{ site_root }}/releases/{{ site_release }}"
-            mode: 'u=rwX,go=rX'
+            mode: "u=rwX,go=rX"
         - name: Проверить index готового сайта
           ansible.builtin.stat:
             path: "{{ site_root }}/releases/{{ site_release }}/index.html"
@@ -90,7 +103,24 @@
             fail_msg: "Native sync не подтверждён; сайт не переключён."
         - name: Проверить сохранённую native ревизию под штатным course lock
           ansible.builtin.command:
-            argv: [docker, exec, -i, -w, /PrairieLearn/apps/prairielearn, "{{ pl_container }}", node, --input-type=module, '-', --course-id, "{{ course_id }}", --job-id, "{{ sync_request.json.job_sequence_id }}", --expected-commit, "{{ expected_native_commit }}"]
+            argv:
+              [
+                docker,
+                exec,
+                -i,
+                -w,
+                /PrairieLearn/apps/prairielearn,
+                "{{ pl_container }}",
+                node,
+                --input-type=module,
+                "-",
+                --course-id,
+                "{{ course_id }}",
+                --job-id,
+                "{{ sync_request.json.job_sequence_id }}",
+                --expected-commit,
+                "{{ expected_native_commit }}",
+              ]
             stdin: "{{ lookup('ansible.builtin.file', playbook_dir + '/../scripts/check-native-revision.mjs') }}"
           changed_when: false
         - name: Подготовить ссылку нового сайта
@@ -101,7 +131,13 @@
             force: true
         - name: Атомарно переключить сайт после подтверждённой native ревизии
           ansible.builtin.command:
-            argv: [mv, -Tf, "{{ site_root }}/.current-pending", "{{ site_root }}/current"]
+            argv:
+              [
+                mv,
+                -Tf,
+                "{{ site_root }}/.current-pending",
+                "{{ site_root }}/current",
+              ]
           changed_when: true
       always:
         - name: Освободить host lock завершённой поставки
