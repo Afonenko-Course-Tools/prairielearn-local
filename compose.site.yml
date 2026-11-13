@@ -9,7 +9,7 @@ services:
         source: ${SITE_ROOT:?Нужен корень готовых releases и ссылки current}
         target: /sites
         read_only: true
-        bind: {create_host_path: false}
+        bind: { create_host_path: false }
       - ./config/nginx.site.conf:/etc/nginx/conf.d/default.conf:ro
     mem_limit: 96m
     cpus: 0.25

@@ -2,8 +2,11 @@
 # Штатные support/migration/start без автоматического общего Workspace host.
 set -euo pipefail
 case "${HOST_JOBS_DIR:-}" in
-  /*) ;;
-  *) echo 'HOST_JOBS_DIR должен быть абсолютным путём хоста' >&2; exit 64 ;;
+/*) ;;
+*)
+  echo 'HOST_JOBS_DIR должен быть абсолютным путём хоста' >&2
+  exit 64
+  ;;
 esac
 export PGDATA=/var/postgres
 pl_pid=''
@@ -18,20 +21,20 @@ stop() {
     local pg_status=0
     su postgres -c 'pg_ctl -D /var/postgres status' >/dev/null 2>&1 || pg_status=$?
     case "$pg_status" in
-      0)
-        if su postgres -c 'pg_ctl -D /var/postgres stop -m fast -w -t 30'; then
-          :
-        else
-          local stop_status=$?
-          echo "Не удалось остановить PostgreSQL (pg_ctl: $stop_status)" >&2
-          if (( exit_status == 0 )); then exit_status=$stop_status; fi
-        fi
-        ;;
-      3) ;; # Кластер уже остановлен.
-      *)
-        echo "Не удалось проверить PostgreSQL (pg_ctl: $pg_status)" >&2
-        if (( exit_status == 0 )); then exit_status=$pg_status; fi
-        ;;
+    0)
+      if su postgres -c 'pg_ctl -D /var/postgres stop -m fast -w -t 30'; then
+        :
+      else
+        local stop_status=$?
+        echo "Не удалось остановить PostgreSQL (pg_ctl: $stop_status)" >&2
+        if ((exit_status == 0)); then exit_status=$stop_status; fi
+      fi
+      ;;
+    3) ;; # Кластер уже остановлен.
+    *)
+      echo "Не удалось проверить PostgreSQL (pg_ctl: $pg_status)" >&2
+      if ((exit_status == 0)); then exit_status=$pg_status; fi
+      ;;
     esac
   fi
   exit "$exit_status"

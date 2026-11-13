@@ -1,9 +1,9 @@
-version: '3'
+version: "3"
 
 vars:
   COURSE: java
-  PLATFORM_ROOT: '{{.ROOT_DIR}}/deps/platform'
-  OUTPUT_ROOT: '{{.ROOT_DIR}}/state/builds'
+  PLATFORM_ROOT: "{{.ROOT_DIR}}/deps/platform"
+  OUTPUT_ROOT: "{{.ROOT_DIR}}/state/builds"
   SITE_URL: '{{if eq .COURSE "java"}}http://127.0.0.1:8088/{{else}}http://127.0.0.1:8089/{{end}}'
 
 tasks:
@@ -23,7 +23,7 @@ tasks:
       vars: [COURSE_ROOT]
     preconditions:
       - sh: 'test "{{.COURSE}}" = java || test "{{.COURSE}}" = system-practice'
-        msg: 'COURSE: java или system-practice'
+        msg: "COURSE: java или system-practice"
     cmds:
       - python3 scripts/prepare-course.py --course '{{.COURSE}}' --source '{{.COURSE_ROOT}}' --platform '{{.PLATFORM_ROOT}}' --output-root '{{.OUTPUT_ROOT}}' --site-url '{{.SITE_URL}}'
   resume-export:

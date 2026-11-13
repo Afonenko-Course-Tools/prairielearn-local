@@ -24,7 +24,13 @@ services:
     extends:
       file: ${PLATFORM_ROOT:-./deps/platform}/compose/runtime.yml
       service: community
-    entrypoint: [/PrairieLearn/.venv/bin/python, /local/scripts/init-config.py, --state, /state]
+    entrypoint:
+      [
+        /PrairieLearn/.venv/bin/python,
+        /local/scripts/init-config.py,
+        --state,
+        /state,
+      ]
     environment:
       PL_HOST: ${PL_HOST:-pl.infra.localhost}
       PL_HTTPS_PORT: ${PL_HTTPS_PORT:-19444}
@@ -38,7 +44,7 @@ services:
       - ./config:/local/config:ro
     mem_limit: 256m
     cpus: 0.5
-    restart: 'no'
+    restart: "no"
 
   pl:
     extends:
@@ -62,7 +68,7 @@ services:
       - ./config/start-pl.sh:/local/config/start-pl.sh:ro
     extra_hosts: [host.docker.internal:host-gateway]
     depends_on:
-      config-init: {condition: service_completed_successfully}
+      config-init: { condition: service_completed_successfully }
     mem_limit: 4g
     cpus: 2
     stop_grace_period: 120s
@@ -92,10 +98,10 @@ services:
       - ${STATE_DIR:-./state}/pl:/run/base-pl:ro
       - ./scripts/bootstrap-admin.mjs:/PrairieLearn/apps/prairielearn/tools/bootstrap-local-admin.mjs:ro
     depends_on:
-      pl: {condition: service_healthy}
+      pl: { condition: service_healthy }
     mem_limit: 384m
     cpus: 0.5
-    restart: 'no'
+    restart: "no"
 
   moodle-db:
     image: ${POSTGRES_IMAGE:-postgres@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f}
@@ -107,7 +113,7 @@ services:
       - moodle-postgres:/var/lib/postgresql/data
       - ${STATE_DIR:-./state}:/run/local:ro
     depends_on:
-      config-init: {condition: service_completed_successfully}
+      config-init: { condition: service_completed_successfully }
     healthcheck:
       test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
       interval: 5s
@@ -118,7 +124,7 @@ services:
     restart: unless-stopped
 
   moodle-init:
-    build: {context: ., dockerfile: moodle/Dockerfile}
+    build: { context: ., dockerfile: moodle/Dockerfile }
     image: ${COMPOSE_PROJECT_NAME:-prairielearn-local}-moodle:5.3
     entrypoint: [sh, -ec]
     command:
@@ -135,20 +141,20 @@ services:
       - *state
       - moodle-data:/var/moodledata
     depends_on:
-      moodle-db: {condition: service_healthy}
+      moodle-db: { condition: service_healthy }
     mem_limit: 512m
     cpus: 1
-    restart: 'no'
+    restart: "no"
 
   moodle:
-    build: {context: ., dockerfile: moodle/Dockerfile}
+    build: { context: ., dockerfile: moodle/Dockerfile }
     image: ${COMPOSE_PROJECT_NAME:-prairielearn-local}-moodle:5.3
     environment: *moodle-env
     volumes:
       - *state
       - moodle-data:/var/moodledata
     depends_on:
-      moodle-init: {condition: service_completed_successfully}
+      moodle-init: { condition: service_completed_successfully }
     healthcheck:
       test: [CMD, curl, --fail, http://127.0.0.1/login/index.php]
       interval: 10s
@@ -169,12 +175,26 @@ services:
       - ${STATE_DIR:-./state}:/state:ro
     networks:
       default:
-        aliases: ["${PL_HOST:-pl.infra.localhost}", "${MOODLE_HOST:-moodle.infra.localhost}"]
+        aliases:
+          [
+            "${PL_HOST:-pl.infra.localhost}",
+            "${MOODLE_HOST:-moodle.infra.localhost}",
+          ]
     depends_on:
-      bootstrap-admin: {condition: service_completed_successfully}
-      moodle: {condition: service_healthy}
+      bootstrap-admin: { condition: service_completed_successfully }
+      moodle: { condition: service_healthy }
     healthcheck:
-      test: [CMD, curl, --fail, --silent, --show-error, --cacert, /state/tls/ca.crt, "https://${PL_HOST:-pl.infra.localhost}:${PL_HTTPS_PORT:-19444}/healthz"]
+      test:
+        [
+          CMD,
+          curl,
+          --fail,
+          --silent,
+          --show-error,
+          --cacert,
+          /state/tls/ca.crt,
+          "https://${PL_HOST:-pl.infra.localhost}:${PL_HTTPS_PORT:-19444}/healthz",
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
