@@ -50,8 +50,12 @@ jobs:
       - name: Установить actionlint и Hadolint из официальных выпусков
         run: |
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-          curl --fail --show-error --location --retry 3 https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-Linux-x86_64 --output "$RUNNER_TEMP/hadolint"
+          curl --fail --show-error --location --retry 3 https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-x86_64 --output "$RUNNER_TEMP/hadolint-linux-x86_64"
+          curl --fail --show-error --location --retry 3 https://github.com/hadolint/hadolint/releases/download/v2.15.1/checksums.sha256 --output "$RUNNER_TEMP/hadolint-checksums.sha256"
+          (cd "$RUNNER_TEMP" && sha256sum --check --ignore-missing hadolint-checksums.sha256)
+          mv "$RUNNER_TEMP/hadolint-linux-x86_64" "$RUNNER_TEMP/hadolint"
           chmod +x "$RUNNER_TEMP/hadolint"
+          "$RUNNER_TEMP/hadolint" --version
           printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - name: Проверить Local
         run: go-task check
