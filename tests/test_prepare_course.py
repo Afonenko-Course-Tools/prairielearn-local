@@ -1,13 +1,14 @@
 """Публикация сохраняет старый выпуск при отказе и изолирует controller bytes."""
 
 import importlib.util
+import sys
 from pathlib import Path
 import tempfile
 import unittest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/prepare-course.py"
 spec = importlib.util.spec_from_file_location("prepare_course", SCRIPT)
-assert spec is not None and spec.loader is not None
+assert spec is not None and spec.loader is not None  # nosec B101 # test-only importlib loader invariant
 prepare = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(prepare)
 
@@ -141,7 +142,7 @@ class PublicationTests(unittest.TestCase):
             str(self.root / "builds"),
         ]
         with (
-            patch.object(prepare.sys, "argv", args),
+            patch.object(sys, "argv", args),
             patch.object(prepare, "run") as inventory,
         ):
             prepare.main()
@@ -233,7 +234,7 @@ class PublicationTests(unittest.TestCase):
 
         with (
             patch.object(
-                prepare.sys,
+                sys,
                 "argv",
                 base_args
                 + ["--source", str(source), "--site-url", "http://localhost/"],
@@ -259,7 +260,7 @@ class PublicationTests(unittest.TestCase):
             with (
                 self.subTest(extra=extra),
                 patch.object(
-                    prepare.sys,
+                    sys,
                     "argv",
                     base_args + ["--resume-export", str(work)] + extra,
                 ),
@@ -315,7 +316,7 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(frozen_package.read_text(), "title: installed package\n")
         with (
             patch.object(
-                prepare.sys,
+                sys,
                 "argv",
                 base_args
                 + ["--resume-export", str(work), "--site-url", "http://localhost"],
@@ -370,7 +371,7 @@ class PublicationTests(unittest.TestCase):
                     str(output),
                 ]
                 with (
-                    patch.object(prepare.sys, "argv", args),
+                    patch.object(sys, "argv", args),
                     patch.object(prepare.shutil, "which", return_value="/bin/true"),
                     patch.object(prepare.shutil, "copytree") as copy,
                 ):
@@ -387,7 +388,7 @@ class PublicationTests(unittest.TestCase):
         import json
         import os
         import shutil
-        import subprocess
+        import subprocess  # nosec B404 # explicit argv process API; no shell
 
         checkout = self.root / "profile-course"
         child = checkout / "tasks"
@@ -498,7 +499,7 @@ class PublicationTests(unittest.TestCase):
         )
         self.assertEqual((child / "_quarto-full.yml").read_text(), author)
         if shutil.which("quarto"):
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603, B607 # installed openssl/CLI from operator PATH; fixed argv, shell=False
                 ["quarto", "inspect", str(child), "--profile", "full,preview"],
                 env=dict(os.environ, XDG_CACHE_HOME=str(self.root / "cache")),
                 check=True,
@@ -532,7 +533,7 @@ class PublicationTests(unittest.TestCase):
     def test_course_export_receives_local_functional_profile(self):
         import os
         import shutil
-        import subprocess
+        import subprocess  # nosec B404 # explicit argv process API; no shell
 
         task = shutil.which("go-task")
         if task is None:
@@ -566,7 +567,7 @@ class PublicationTests(unittest.TestCase):
                         COURSE_PREVIEW_PROFILE=local,
                         QUARTO_PROFILE="custom",
                     )
-                    subprocess.run(
+                    subprocess.run(  # nosec B603 # trusted CLI argv assembled by Local; shell=False
                         [
                             task,
                             "--dir",
@@ -622,7 +623,7 @@ class PublicationTests(unittest.TestCase):
             raise prepare.subprocess.CalledProcessError(1, command)
 
         with (
-            patch.object(prepare.sys, "argv", args),
+            patch.object(sys, "argv", args),
             patch.object(prepare.shutil, "which", return_value="/bin/true"),
             patch.object(prepare, "run", side_effect=source_guard),
         ):
@@ -683,7 +684,7 @@ class PublicationTests(unittest.TestCase):
                     str(case / "builds"),
                 ]
                 with (
-                    patch.object(prepare.sys, "argv", args),
+                    patch.object(sys, "argv", args),
                     patch.object(prepare.shutil, "which", return_value="/bin/true"),
                     patch.object(prepare, "run") as build,
                 ):

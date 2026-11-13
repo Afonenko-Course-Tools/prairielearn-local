@@ -2,6 +2,7 @@
 import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
+/** @param {NodeJS.ProcessEnv} env */
 export function adminSettings(env) {
   const actorUid = env.BOOTSTRAP_ADMIN_UID;
   if (
@@ -14,6 +15,7 @@ export function adminSettings(env) {
 }
 
 /** Только первый actor в пустой БД; существующая роль никогда не выдаётся заново. */
+/** @param {import("../types/native.js").AdministratorDependencies} dependencies @param {string} uid */
 export async function initialAdministrator(
   { db, users, sql, UserSchema, AdministratorSchema, z },
   uid,
@@ -42,7 +44,11 @@ export async function initialAdministrator(
   });
 }
 
+/** @param {{actorUid: string, plRoot: string}} settings */
 export async function bootstrapActor(settings) {
+  /** @template {keyof import("../types/native.js").NativeModules} K
+   * @param {K} path
+   * @returns {Promise<import("../types/native.js").NativeModules[K]>} */
   const native = (path) =>
     import(
       pathToFileURL(

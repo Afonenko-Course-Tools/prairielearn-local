@@ -1,15 +1,16 @@
 import importlib.util
 import json
 from pathlib import Path
-import subprocess
+import subprocess  # nosec B404 # explicit argv process API; no shell
 import tempfile
 import unittest
+from unittest import mock
 from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location(
     "preview", Path(__file__).parents[1] / "scripts/preview.py"
 )
-assert SPEC is not None and SPEC.loader is not None
+assert SPEC is not None and SPEC.loader is not None  # nosec B101 # test-only importlib loader invariant
 preview = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(preview)
 
@@ -130,7 +131,7 @@ class PreviewActivationTest(unittest.TestCase):
             )
         return result, run, wait
 
-    def job(self, phase, *, job_id="91", native_status=None):
+    def job(self, phase, *, job_id: str | None = "91", native_status=None):
         path = self.job_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         record = {"coursePath": "/course/java/current", "phase": phase}
@@ -240,7 +241,7 @@ class PreviewActivationTest(unittest.TestCase):
         self.candidate()
         for name, target in [
             ("prepared", "../outside"),
-            ("active", "/tmp/external"),
+            ("active", "/outside-native-fixture"),
             ("current", "../outside/native"),
             ("site", "prepared/site"),
         ]:
@@ -400,7 +401,7 @@ class PreviewActivationTest(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             self.activate(lost_response)
         self.candidate("newer")
-        run = unittest.mock.Mock()
+        run = mock.Mock()
         with self.assertRaisesRegex(ValueError, "ID неизвестен.*POST запрещён"):
             self.activate(run)
         run.assert_not_called()
@@ -417,7 +418,7 @@ class PreviewActivationTest(unittest.TestCase):
         with self.assertRaises(KeyboardInterrupt):
             self.activate(interrupted)
         self.assert_status("failed", "old", terminal=False)
-        run = unittest.mock.Mock()
+        run = mock.Mock()
         with self.assertRaisesRegex(ValueError, "ID неизвестен"):
             self.activate(run)
         run.assert_not_called()

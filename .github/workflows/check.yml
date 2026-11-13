@@ -19,6 +19,19 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
       - uses: arduino/setup-task@v2
       - name: Установить системные зависимости проверок
         timeout-minutes: 5
@@ -28,7 +41,17 @@ jobs:
           grep -Rq 'mirror+file:/etc/apt/apt-mirrors.txt' /etc/apt/sources.list.d
           printf '%s\n' 'https://mirrors.edge.kernel.org/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt
           sudo timeout --signal=TERM --kill-after=5s 120s apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 --error-on=any update
-          sudo timeout --signal=TERM --kill-after=5s 120s apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install --yes python3-yaml shellcheck nodejs
+          sudo timeout --signal=TERM --kill-after=5s 120s apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install --yes shellcheck shfmt php-cli
           sudo ln -sf "$(command -v task)" /usr/local/bin/go-task
+      - name: Установить Python и Node инструменты штатными менеджерами
+        run: |
+          python -m pip install -r requirements-dev.txt
+          npm ci --ignore-scripts
+      - name: Установить actionlint и Hadolint из официальных выпусков
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          curl --fail --show-error --location --retry 3 https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-Linux-x86_64 --output "$RUNNER_TEMP/hadolint"
+          chmod +x "$RUNNER_TEMP/hadolint"
+          printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - name: Проверить Local
         run: go-task check

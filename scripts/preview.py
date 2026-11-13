@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 import secrets
 import stat
-import subprocess
+import subprocess  # nosec B404 # explicit argv process API; no shell
 import sys
 import time
 import tempfile
@@ -209,7 +209,8 @@ def saved_job_path(status: dict, state_dir: Path, course_name: str) -> Path:
 
 def pending_load(status: dict | None, job: dict | None) -> bool:
     successful_unaccepted = bool(
-        native_terminal(job)
+        job is not None
+        and native_terminal(job)
         and job.get("nativeStatus") == "Success"
         and not job.get("validationError")
     )
@@ -268,7 +269,7 @@ def run(
     command: list[str], *, env: dict[str, str], capture: bool = False
 ) -> subprocess.CompletedProcess[str]:
     start = time.monotonic()
-    with subprocess.Popen(
+    with subprocess.Popen(  # nosec B603 # trusted CLI argv assembled by Local; shell=False
         command, env=env, text=True, stdout=subprocess.PIPE if capture else None
     ) as process:
         while True:
@@ -348,7 +349,7 @@ def wait_http(origin: str, timeout: int, *, site: bool = True) -> None:
             for route in (
                 ("/pl/webhooks/ping", "/index.html") if site else ("/pl/webhooks/ping",)
             ):
-                with urlopen(origin + route, timeout=5) as response:
+                with urlopen(origin + route, timeout=5) as response:  # nosec B310 # caller constructs loopback HTTP origin; no file URLs
                     if response.status != 200:
                         raise ValueError("Неожиданный HTTP status readiness")
             return
@@ -400,6 +401,8 @@ def activate(
         # После сбоя commit повторно читаем receipt того же job, без нового POST.
         resume = pending_load(prior, job)
         if resume:
+            if prior is None or job_path is None:
+                raise ValueError("Потерян state незавершённого native job")
             if prior.get("runtimeProject") != project:
                 raise ValueError(
                     "Незавершённый native job относится к другому или неизвестному state/project; требуется диагностика прежней попытки"
@@ -434,6 +437,8 @@ def activate(
             plain_file(job_path)
             if job_path.exists():
                 raise ValueError("Job state нового attempt уже существует")
+        if job_path is None:
+            raise ValueError("Не задан state native job")
         if candidate is None:
             raise ValueError("Нет подготовленного release; сначала выполните prepare")
         if accepted is not None:
@@ -453,7 +458,7 @@ def activate(
             "jobStateFile": str(job_path),
             "runtimeProject": project,
         }
-        if resume:
+        if resume and job is not None:
             status["jobSequenceId"] = job["jobSequenceId"]
         write_json(course / "load-status.json", status)
         try:
@@ -498,7 +503,11 @@ def activate(
             result = run(command, env=env, capture=True)
             print(result.stdout, end="")
             job = native_job_state(job_path, course_name)
-            if not native_terminal(job) or job.get("nativeStatus") != "Success":
+            if (
+                job is None
+                or not native_terminal(job)
+                or job.get("nativeStatus") != "Success"
+            ):
                 raise ValueError(
                     "Native job не подтвердил terminal Success; accepted release не переключён"
                 )
@@ -646,4 +655,4 @@ if __name__ == "__main__":
         main()
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         print(f"Preview остановлен: {error}", file=sys.stderr)
-        raise SystemExit(1)
+        raise SystemExit(1) from error

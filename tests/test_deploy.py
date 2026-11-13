@@ -1,6 +1,6 @@
 import io
 from pathlib import Path
-import subprocess
+import subprocess  # nosec B404 # explicit argv process API; no shell
 import tarfile
 import tempfile
 import unittest
@@ -16,7 +16,10 @@ class DeployBoundaryTest(unittest.TestCase):
         tasks = PLAY["tasks"]
         guarded = next(task for task in tasks if "block" in task)
         block = guarded["block"]
-        index = lambda module: next(i for i, task in enumerate(block) if module in task)
+
+        def index(module):
+            return next(i for i, task in enumerate(block) if module in task)
+
         uri = [task for task in block if "ansible.builtin.uri" in task]
         self.assertEqual(len(uri), 2)
         self.assertEqual(uri[0]["ansible.builtin.uri"]["method"], "POST")
@@ -73,7 +76,7 @@ class DeployBoundaryTest(unittest.TestCase):
                     if kind in (tarfile.SYMTYPE, tarfile.LNKTYPE):
                         entry.linkname = "/outside"
                     tar.addfile(entry, io.BytesIO(b"x") if entry.size else None)
-            return subprocess.run(
+            return subprocess.run(  # nosec B603, B607 # installed openssl/CLI from operator PATH; fixed argv, shell=False
                 ["python3", "-c", validator, str(archive)], capture_output=True
             ).returncode
 

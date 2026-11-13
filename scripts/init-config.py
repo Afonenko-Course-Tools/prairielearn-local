@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import re
 import secrets
-import subprocess
+import subprocess  # nosec B404 # explicit argv process API; no shell
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,7 +74,7 @@ def tls(state, pl_host, moodle_host):
     existing = [(directory / name).exists() for name in names]
     if all(existing):
         for name in (pl_host, moodle_host):
-            subprocess.run(
+            subprocess.run(  # nosec B603, B607 # installed openssl/CLI from operator PATH; fixed argv, shell=False
                 [
                     "openssl",
                     "verify",
@@ -92,7 +92,7 @@ def tls(state, pl_host, moodle_host):
         raise ValueError("Неполный TLS state: существующие ключи не заменены")
     old_umask = os.umask(0o077)
     try:
-        subprocess.run(
+        subprocess.run(  # nosec B603, B607 # installed openssl/CLI from operator PATH; fixed argv, shell=False
             [
                 "openssl",
                 "req",
@@ -117,7 +117,7 @@ def tls(state, pl_host, moodle_host):
             check=True,
             capture_output=True,
         )
-        subprocess.run(
+        subprocess.run(  # nosec B603, B607 # installed openssl/CLI from operator PATH; fixed argv, shell=False
             [
                 "openssl",
                 "req",
@@ -143,7 +143,7 @@ def tls(state, pl_host, moodle_host):
             + moodle_host
             + "\n"
         )
-        subprocess.run(
+        subprocess.run(  # nosec B603, B607 # installed openssl/CLI from operator PATH; fixed argv, shell=False
             [
                 "openssl",
                 "x509",

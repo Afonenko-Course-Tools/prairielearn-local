@@ -1,0 +1,7 @@
+# Стандартные инструменты проверок Local; системные CLI описаны в docs/quality.md.
+ansible-lint>=26.0
+bandit>=1.9
+PyYAML>=6.0
+pyright>=1.1.400
+ruff>=0.17
+Yamllint>=1.37

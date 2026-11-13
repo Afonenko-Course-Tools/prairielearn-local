@@ -16,6 +16,7 @@ test("настройки actor не требуют курса, registry или G
   }
 });
 
+/** @param {{users?: import("../types/native.js").Actor[], admins?: import("../types/native.js").Actor[], courses?: number}} [settings] */
 function nativeFixture({ users = [], admins = [], courses = 0 } = {}) {
   const state = {
     users: [...users],
@@ -25,6 +26,7 @@ function nativeFixture({ users = [], admins = [], courses = 0 } = {}) {
     grants: 0,
     transaction: false,
   };
+  /** @type {import("../types/native.js").AdministratorDependencies} */
   const native = {
     UserSchema: {},
     AdministratorSchema: {},
@@ -53,6 +55,7 @@ function nativeFixture({ users = [], admins = [], courses = 0 } = {}) {
         assert.equal(sql, "native insert_admin_by_user_uid");
         assert.equal(state.transaction, true);
         const actor = state.users.find((row) => row.uid === args.uid);
+        assert.ok(actor);
         assert.equal(args.authn_user_id, actor.id);
         state.grants++;
         state.admins.push(actor);

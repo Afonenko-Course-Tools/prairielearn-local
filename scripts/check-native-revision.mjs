@@ -10,7 +10,9 @@ const numericId = /^[1-9][0-9]*(?![\s\S])/;
 const usage =
   "check-native-revision.mjs --course-id ID --job-id ID --expected-commit FULL_SHA";
 
+/** @param {string[]} args @returns {import("../types/native.js").Options} */
 export function revisionOptions(args) {
+  /** @type {Record<string, string>} */
   const options = {};
   for (let i = 0; i < args.length; i += 2) {
     if (
@@ -35,6 +37,7 @@ export function revisionOptions(args) {
   return result;
 }
 
+/** @param {import("../types/native.js").Options} options @param {{course: import("../types/native.js").Course | null, jobs: import("../types/native.js").Job[], git: import("../types/native.js").GitState}} state */
 export function acceptRevision(
   { courseId, jobId, expectedCommit },
   { course, jobs, git },
@@ -67,6 +70,7 @@ export function acceptRevision(
 }
 
 // Отдельные зависимости позволяют проверить отказ до переключения сайта без DB/Docker.
+/** @param {import("../types/native.js").Options} options @param {import("../types/native.js").RevisionDependencies} dependencies */
 export async function verifyRevision(
   options,
   { db, locks, courses, schemas, readGit },
@@ -78,14 +82,19 @@ export async function verifyRevision(
       schemas.course,
     );
   const before = await readCourse();
-  if (!before || !isAbsolute(before.path ?? "") || before.path === "/")
+  if (
+    !before ||
+    !before.path ||
+    !isAbsolute(before.path) ||
+    before.path === "/"
+  )
     throw new Error("Native course отсутствует или имеет неверный path");
   return locks.doWithLock(
     courses.getLockNameForCoursePath(before.path),
     { timeout: 10000 },
     async () => {
       const course = await readCourse();
-      if (!course || course.path !== before.path)
+      if (!course || !course.path || course.path !== before.path)
         throw new Error("Native course path изменился во время проверки");
       const jobs = await db.queryRows(
         `SELECT job_sequence_id::text, status,
@@ -104,7 +113,9 @@ export async function verifyRevision(
   );
 }
 
+/** @param {string} coursePath */
 async function readGit(coursePath) {
+  /** @param {string[]} args */
   const git = async (args) =>
     (
       await promisify(execFile)(
@@ -131,6 +142,9 @@ async function readGit(coursePath) {
 async function main() {
   const options = revisionOptions(process.argv.slice(2));
   const root = process.env.PL_ROOT ?? "/PrairieLearn";
+  /** @template {keyof import("../types/native.js").NativeModules} K
+   * @param {K} name
+   * @returns {Promise<import("../types/native.js").NativeModules[K]>} */
   const native = (name) =>
     import(pathToFileURL(`${root}/apps/prairielearn/dist/${name}.js`).href);
   const { config, loadConfig } = await native("lib/config");

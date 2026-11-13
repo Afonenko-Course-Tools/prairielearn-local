@@ -8,15 +8,15 @@ vars:
 
 tasks:
   check:
-    desc: Быстрые проверки Local без сборки курсов и запуска контейнеров
+    desc: Все проверки собственных файлов Local без запуска контейнеров
+    env:
+      PLATFORM_ROOT: "{{.PLATFORM_ROOT}}"
     cmds:
-      - >-
-        python3 -c "import ast; from pathlib import Path; files = sorted(p for root in ('scripts', 'tests') for p in Path(root).rglob('*.py')); [ast.parse(p.read_text(), filename=str(p)) for p in files]; print(f'Python syntax: {len(files)} files')"
-      - python3 -m unittest discover -s tests -p 'test_*.py' -v
-      - shellcheck config/start-pl.sh config/start-preview-pl.sh moodle/entrypoint.sh
-      - node --check scripts/bootstrap-admin.mjs
-      - node --check scripts/check-native-revision.mjs
-      - node --test tests/bootstrap-admin.test.mjs tests/native-revision.test.mjs
+      - python3 scripts/quality.py check
+  format:
+    desc: Форматировать собственные Python, shell, JS, YAML, JSON и Markdown
+    cmds:
+      - python3 scripts/quality.py format
   prepare:
     desc: Собрать выбранный checkout и сохранить подготовленный выпуск
     requires:

@@ -9,8 +9,7 @@ import os
 from pathlib import Path
 import shutil
 import stat
-import subprocess
-import sys
+import subprocess  # nosec B404 # explicit argv process API; no shell
 import tempfile
 import time
 from urllib.parse import urlparse
@@ -19,7 +18,7 @@ from urllib.parse import urlparse
 def run(command: list[str], *, cwd: Path, env: dict[str, str]) -> None:
     print("+ " + " ".join(command), flush=True)
     start = time.monotonic()
-    with subprocess.Popen(command, cwd=cwd, env=env) as process:
+    with subprocess.Popen(command, cwd=cwd, env=env) as process:  # nosec B603 # trusted CLI argv assembled by Local; shell=False
         while True:
             try:
                 status = process.wait(timeout=30)
@@ -125,7 +124,10 @@ def preview_profiles(checkout: Path, site_url: str) -> None:
                 yaml.safe_dump(project, allow_unicode=True, sort_keys=False)
             )
 
-    root = {"website": {"site-url": base}, "course-navigation": {"course-url": base}}
+    root: dict[str, object] = {
+        "website": {"site-url": base},
+        "course-navigation": {"course-url": base},
+    }
     if config.get("project", {}).get("type") == "book":
         root["book"] = {"site-url": base}
     navigation(config, checkout / "_quarto.yml")
@@ -406,6 +408,8 @@ def main() -> None:
                 flush=True,
             )
             print(f"prepare: одноразовый checkout {checkout}", flush=True)
+            if source is None:
+                raise ValueError("Не задан checkout курса")
             shutil.copytree(
                 source,
                 checkout,
